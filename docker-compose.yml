@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: mysql:8.0
@@ -16,33 +14,50 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
 
+  # === 백엔드 서비스 (Blue/Green) ===
   app-blue:
-    build: ./backend
+    build: 
+      context: ./backend
     container_name: mengnyang-blue
-    ports:
-      - "8081:8080"
     environment:
       - APP_VERSION=v1
       - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
+    expose:
+      - "8080" # Nginx를 통해서만 접근하므로 expose 사용
     depends_on:
-      db:
-        condition: service_healthy
+      db: { condition: service_healthy }
+    restart: always
 
   app-green:
-    build: ./backend
+    build:
+      context: ./backend
     container_name: mengnyang-green
-    ports:
-      - "8082:8080"
     environment:
       - APP_VERSION=v2
       - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
+    expose:
+      - "8080"
     depends_on:
-      db:
-        condition: service_healthy
+      db: { condition: service_healthy }
     profiles:
       - green
+    restart: always
 
+  # === 프론트엔드 서비스 추가 ===
+  app-frontend:
+    build:
+      context: ./frontend
+      args:
+        # 로컬의 .env.local 파일을 읽어서 빌드 시 주입
+        NEXT_PUBLIC_KAKAO_MAP_API_KEY: ${NEXT_PUBLIC_KAKAO_MAP_API_KEY}
+    container_name: mengnyang-frontend
+    expose:
+      - "3000"
+    restart: always
+
+  # === Nginx 서비스 ===
   nginx:
     image: nginx:latest
     container_name: mengnyang-nginx
@@ -52,6 +67,8 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - app-blue
+      - app-frontend
+    restart: always
 
 volumes:
   db-data:
