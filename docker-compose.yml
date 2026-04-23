@@ -47,14 +47,16 @@ services:
     restart: always
 
   # === 프론트엔드 서비스 추가 ===
-  app-frontend:
+    app-frontend:
     build:
       context: ./frontend
-      # args는 EC2에서 .env 파일을 직접 못 읽으므로 제거합니다.
+      args:
+        # 빌드 시점에 환경변수를 직접 전달합니다.
+        NEXT_PUBLIC_KAKAO_MAP_API_KEY: ${NEXT_PUBLIC_KAKAO_MAP_API_KEY}
     container_name: mengnyang-frontend
-    # *** 여기가 수정된 부분입니다 ***
-    env_file:
-      - .env # 컨테이너 실행 시 .env 파일을 읽어 환경변수로 주입
+    # env_file 대신, 실행 시점에도 환경변수를 전달합니다.
+    environment:
+      - NEXT_PUBLIC_KAKAO_MAP_API_KEY=${NEXT_PUBLIC_KAKAO_MAP_API_KEY}
     expose:
       - "3000"
     restart: always
