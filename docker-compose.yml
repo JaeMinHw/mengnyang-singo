@@ -47,7 +47,7 @@ services:
     restart: always
 
   # === 프론트엔드 서비스 추가 ===
-    app-frontend:
+  app-frontend:
     build: # build는 한 번만!
       context: ./frontend
       args:
