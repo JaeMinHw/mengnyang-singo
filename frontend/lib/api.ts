@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // 백엔드 API 서버의 기본 주소
-const API_URL = "http://localhost:8081/api";
+const API_URL = "/api";
 
 // 'api'라는 이름의 axios 인스턴스 생성
 const api = axios.create({
