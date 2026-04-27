@@ -6,7 +6,9 @@ from app.core.config import settings
 app = FastAPI(
     title="멍냥신고 API",
     description="길고양이/유기견 목격 신고 서비스",
-    version=settings.APP_VERSION
+    version=settings.APP_VERSION,
+    # FastAPI 애플리케이션의 루트 경로를 /api로 설정합니다.
+    root_path="/api" 
 )
 
 app.add_middleware(
