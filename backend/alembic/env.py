@@ -20,10 +20,13 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 import sys
 import os
+from dotenv import load_dotenv
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.database import Base
 from app.models.sighting import Sighting
+from app.models.user import User
 
 target_metadata = Base.metadata
 
@@ -31,6 +34,19 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+
+# .env 파일이 있으면 읽어오기
+load_dotenv()
+
+
+database_url = os.getenv("DATABASE_URL")
+if not database_url:
+    # 혹시 환경 변수가 없으면 에러를 띄워서 알려줌
+    raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
+
+# Alembic 설정에 가져온 URL 강제로 덮어쓰기
+config.set_main_option("sqlalchemy.url", database_url)
 
 
 def run_migrations_offline() -> None:
@@ -45,9 +61,9 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+
     context.configure(
-        url=url,
+        url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
