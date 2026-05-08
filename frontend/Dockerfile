@@ -11,6 +11,11 @@ RUN npm install
 COPY . .
 
 # 프로덕션용으로 앱을 빌드합니다.
+
+ARG NEXT_PUBLIC_KAKAO_MAP_API_KEY
+ENV NEXT_PUBLIC_KAKAO_MAP_API_KEY=$NEXT_PUBLIC_KAKAO_MAP_API_KEY
+
+
 RUN npm run build
 
 

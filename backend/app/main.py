@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import health, sighting
 from app.core.config import settings
+from app.api import health, sighting, auth  # auth 추가!
 
 app = FastAPI(
     title="멍냥신고 API",
@@ -21,7 +22,7 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(sighting.router, tags=["Sighting"])
-
+app.include_router(auth.router, tags=["Auth"])  # 방금 만든 라우터 연결!
 
 @app.get("/")
 def root():
