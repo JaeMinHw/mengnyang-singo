@@ -25,6 +25,9 @@ services:
     environment:
       - APP_VERSION=v1
       - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
     expose:
       - "8080" # Nginx를 통해서만 접근하므로 expose 사용
     depends_on:
@@ -38,6 +41,9 @@ services:
     environment:
       - APP_VERSION=v2
       - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
     expose:
       - "8080"
     depends_on:

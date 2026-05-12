@@ -20,3 +20,15 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True  # ORM 모델을 딕셔너리로 자동 변환해주는 설정
+
+
+# 3. 클라이언트가 로그인할 때 보내는 데이터
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+# 4. 로그인 성공 시 서버가 돌려줄 JWT 응답 데이터
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

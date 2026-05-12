@@ -4,7 +4,10 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.core.security import get_password_hash
-
+# 1. 스키마 import 추가
+from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
+# 2. 보안 함수 import 추가
+from app.core.security import get_password_hash, verify_password, create_access_token
 router = APIRouter()
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -37,3 +40,26 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
 
     return new_user
+
+
+
+# 3. 로그인 API 추가
+@router.post("/login", response_model=Token)
+def login(user_data: UserLogin, db: Session = Depends(get_db)):
+    # 1) 이메일로 사용자 조회
+    user = db.query(User).filter(User.email == user_data.email).first()
+
+    # 2) 사용자가 없거나 비밀번호가 틀리면 401 Unauthorized 에러
+    if not user or not verify_password(user_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 3) JWT 토큰 발급
+    # 'sub'는 subject의 약자로, JWT 표준에서 '누구의 토큰인지'를 나타내는 클레임(claim)입니다.
+    access_token = create_access_token(data={"sub": user.email})
+
+    # 4) 토큰 반환
+    return Token(access_token=access_token, token_type="bearer")
