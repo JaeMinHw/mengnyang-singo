@@ -8,6 +8,8 @@ from app.core.security import get_password_hash
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
 # 2. 보안 함수 import 추가
 from app.core.security import get_password_hash, verify_password, create_access_token
+from app.core.dependencies import get_current_user
+
 router = APIRouter()
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -63,3 +65,13 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
 
     # 4) 토큰 반환
     return Token(access_token=access_token, token_type="bearer")
+
+
+@router.get("/me", response_model=UserResponse)
+def read_me(current_user: User = Depends(get_current_user)):
+    """
+    [보호된 API]
+    현재 로그인한 사용자의 정보를 반환합니다.
+    Authorization: Bearer <access_token> 헤더가 필요합니다.
+    """
+    return current_user
