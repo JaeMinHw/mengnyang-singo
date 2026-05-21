@@ -17,7 +17,10 @@ def create_sighting(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    sighting = Sighting(**data.model_dump())
+    sighting = Sighting(
+        **data.model_dump(),
+        user_id=current_user.id,
+    )
     db.add(sighting)
     db.commit()
     db.refresh(sighting)

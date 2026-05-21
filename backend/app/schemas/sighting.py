@@ -14,6 +14,7 @@ class SightingCreate(BaseModel):
 
 class SightingResponse(BaseModel):
     id: int
+    user_id: int
     animal_type: str
     description: Optional[str]
     image_url: Optional[str]

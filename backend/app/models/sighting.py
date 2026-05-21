@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Text, Float, DateTime
+from sqlalchemy import Column, BigInteger, String, Text, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -7,6 +7,7 @@ class Sighting(Base):
     __tablename__ = "sighting"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("user.id"), nullable=False)
     animal_type = Column(String(20), nullable=False)   # DOG, CAT, OTHER
     description = Column(Text)
     image_url = Column(String(500))
