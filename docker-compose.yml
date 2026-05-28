@@ -52,6 +52,23 @@ services:
       - green
     restart: always
 
+
+  app-migrate:
+    build:
+      context: ./backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+    depends_on:
+      db: { condition: service_healthy }
+    profiles:
+      - migrate
+
   # === 프론트엔드 서비스 추가 ===
   app-frontend:
     build: # build는 한 번만!
