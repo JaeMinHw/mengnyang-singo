@@ -19,6 +19,17 @@ interface ClusterInfo {
   markers: Sighting[];
 }
 
+interface CurrentUser {
+  id: number;
+  email: string;
+  nickname: string;
+  phone: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+
 // 날짜 포맷팅 헬퍼 함수
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -208,6 +219,8 @@ function MapWithLogic() {
 // 메인 페이지 컴포넌트
 export default function Home() {
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
 
   const handleScriptLoad = () => {
@@ -216,10 +229,36 @@ export default function Home() {
     });
   };
 
+    useEffect(() => {
+    api.get<CurrentUser>("/me")
+      .then((response) => {
+        setCurrentUser(response.data);
+      })
+      .catch((error) => {
+        console.log("로그인되지 않았거나 토큰이 유효하지 않습니다.", error);
+        setCurrentUser(null);
+      })
+      .finally(() => {
+        setAuthLoading(false);
+      });
+  }, []);
+
   return (
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
       <main className="w-full h-screen bg-gray-50">
+                <div className="absolute top-4 left-4 z-50 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-2xl px-4 py-3 shadow-md">
+          {authLoading ? (
+            <p className="text-sm text-gray-500">로그인 상태 확인 중...</p>
+          ) : currentUser ? (
+            <div className="text-sm text-gray-800">
+              <p className="font-semibold">{currentUser.nickname}님 로그인됨</p>
+              <p className="text-xs text-gray-500">{currentUser.email}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">비로그인 상태입니다.</p>
+          )}
+        </div>
         {loading ? (
           <div className="flex flex-col items-center justify-center w-full h-full text-gray-600">
             <div className="animate-bounce text-4xl mb-4">🗺️</div>
