@@ -58,9 +58,13 @@ const formatDateShort = (dateString: string) => {
 // =============================================
 function MapWithLogic({
   sightings,
+  focusedSighting,
+  onMarkerSelect,
   onBoundsChange,
 }: {
   sightings: Sighting[];
+  focusedSighting: Sighting | null;
+  onMarkerSelect: (sighting: Sighting) => void;
   onBoundsChange: (visibleSightings: Sighting[]) => void;
 }) {
   const map = useMap();
@@ -120,6 +124,20 @@ function MapWithLogic({
     };
   }, [map]);
 
+  useEffect(() => {
+    if (!map || !focusedSighting) return;
+
+    const targetPosition = new kakao.maps.LatLng(
+      Number(focusedSighting.latitude),
+      Number(focusedSighting.longitude)
+    );
+
+    map.setLevel(3);
+    map.setCenter(targetPosition);
+    setSelectedCluster(null);
+    setSelectedMarker(focusedSighting);
+  }, [map, focusedSighting]);
+
   const handleClusterClick = (_target: kakao.maps.MarkerClusterer, cluster: kakao.maps.Cluster) => {
     const clusterMarkers = cluster.getMarkers();
     const clusterSightings = clusterMarkers
@@ -159,6 +177,7 @@ function MapWithLogic({
               map.setCenter(marker.getPosition());
               setSelectedMarker(sighting);
               setSelectedCluster(null);
+              onMarkerSelect(sighting);
             }}
             image={{
               src: sighting.animal_type === "DOG" ? "/dog-marker.png" : "/cat-marker.png",
@@ -304,6 +323,8 @@ export default function Home() {
   const [visibleSightings, setVisibleSightings] = useState<Sighting[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
+  const [focusedSighting, setFocusedSighting] = useState<Sighting | null>(null);
+
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
 
@@ -334,6 +355,10 @@ export default function Home() {
   }, []);
 
   const handleSightingSelect = (sighting: Sighting) => {
+    setSelectedSightingId(sighting.id);
+    setFocusedSighting({ ...sighting });
+  };
+  const handleMarkerSelect = (sighting: Sighting) => {
     setSelectedSightingId(sighting.id);
   };
 
@@ -375,7 +400,12 @@ export default function Home() {
               </div>
             ) : (
               <KakaoMap center={{ lat: 37.5665, lng: 126.9780 }} style={{ width: "100%", height: "100%" }} level={8}>
-                <MapWithLogic sightings={filteredSightings} onBoundsChange={handleBoundsChange} />
+                <MapWithLogic
+                  sightings={filteredSightings}
+                  onBoundsChange={handleBoundsChange}
+                  focusedSighting={focusedSighting}
+                  onMarkerSelect={handleMarkerSelect}
+                />
               </KakaoMap>
             )}
           </div>
