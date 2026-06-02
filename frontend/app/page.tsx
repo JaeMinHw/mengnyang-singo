@@ -344,6 +344,12 @@ export default function Home() {
   const handleScriptLoad = () => {
     window.kakao.maps.load(() => setLoading(false));
   };
+  // 이미 SDK가 로드되어 있을 경우를 위한 처리
+  useEffect(() => {
+      if (window.kakao && window.kakao.maps) {
+          setLoading(false);
+      }
+  }, []);
 
   const filteredSightings = filter === "all"
     ? sightings

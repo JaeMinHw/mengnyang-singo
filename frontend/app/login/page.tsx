@@ -31,7 +31,7 @@ export default function LoginPage() {
 
       setAccessToken(response.data.access_token);
 
-      alert("로그인에 성공했습니다.");
+      // alert("로그인에 성공했습니다.");
       router.push("/");
     } catch (error: unknown) {
       console.error("로그인 실패:", error);

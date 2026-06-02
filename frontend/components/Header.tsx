@@ -39,9 +39,17 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
           <p className="text-sm text-gray-400">확인 중...</p>
         ) : currentUser ? (
           <>
+            <Link
+              href="/sightings/new"
+              className="text-sm bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              신고하기
+            </Link>
+
             <span className="text-sm text-gray-700 font-medium">
               {currentUser.nickname}님
             </span>
+
             <button
               onClick={handleLogout}
               className="text-sm text-gray-500 hover:text-red-500 transition-colors"
