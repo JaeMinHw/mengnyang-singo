@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 
+
 // 1. 휴대폰 번호 포맷팅 함수 (컴포넌트 외부나 내부에 독립적으로 선언)
 const formatPhoneNumber = (value: string) => {
   if (!value) return value;
@@ -68,6 +69,9 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+          <Link href="/" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4">
+            ← 돌아가기
+          </Link>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">회원가입</h1>
         <p className="text-sm text-gray-500 mb-6">
           멍냥신고 서비스를 이용하려면 회원가입해주세요.

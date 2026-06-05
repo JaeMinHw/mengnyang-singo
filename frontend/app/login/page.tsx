@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { setAccessToken } from "@/lib/auth";
+import Link from "next/link";
 
 interface LoginResponse {
   access_token: string;
@@ -44,6 +45,9 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+          <Link href="/" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4">
+            ← 돌아가기
+          </Link>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">로그인</h1>
         <p className="text-sm text-gray-500 mb-6">
           멍냥신고 서비스를 이용하려면 로그인해주세요.
