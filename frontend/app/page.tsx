@@ -52,6 +52,17 @@ const formatDateShort = (dateString: string) => {
   const date = new Date(dateString);
   return `${date.getFullYear().toString().slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 };
+// 주소에서 기본 주소와 상세 위치를 분리
+const parseAddress = (address: string | null) => {
+  if (!address) return { main: null, detail: null };
+
+  const parts = address.split("|||");
+  return {
+    main: parts[0] || null,
+    detail: parts[1] || null,
+  };
+};
+
 
 // =============================================
 // 지도 내부 로직
@@ -199,6 +210,15 @@ function MapWithLogic({
                   <span className="text-xs font-bold">✕</span>
                 </button>
               </div>
+              {selectedMarker.address && (() => {
+                const { main, detail } = parseAddress(selectedMarker.address);
+                return (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {main && <p>📍 {main}</p>}
+                    {detail && <p className="text-gray-400">└ {detail}</p>}
+                  </div>
+                );
+              })()}
               <p className="text-sm text-gray-700 mt-1 leading-relaxed line-clamp-3">
                 {selectedMarker.description || "등록된 특징 설명이 없습니다."}
               </p>
@@ -231,6 +251,15 @@ function MapWithLogic({
                       </div>
                       <span className="text-[11px] text-gray-400 group-hover:text-gray-500">{formatDateShort(marker.created_at)}</span>
                     </div>
+                    {marker.address && (() => {
+                      const { main, detail } = parseAddress(marker.address);
+                      return (
+                        <div className="text-xs text-gray-500 mb-1">
+                          {main && <p>📍 {main}</p>}
+                          {detail && <p className="text-gray-400">└ {detail}</p>}
+                        </div>
+                      );
+                    })()}
                     <div className="text-sm text-gray-600 leading-snug line-clamp-2">{marker.description || "등록된 특징이 없습니다."}</div>
                   </li>
                 ))}
@@ -244,10 +273,8 @@ function MapWithLogic({
   );
 }
 
-// =============================================
-// 오른쪽 신고 목록 패널
-// =============================================
-function SightingListPanel({
+
+function SightingList({
   sightings,
   selectedId,
   onSelect,
@@ -257,58 +284,128 @@ function SightingListPanel({
   onSelect: (sighting: Sighting) => void;
 }) {
   return (
-    <div className="w-96 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
-        <h2 className="font-semibold text-lg text-gray-900">
-          신고 목록 ({sightings.length})
-        </h2>
+    <ul className="divide-y divide-gray-100">
+      {sightings.map((sighting) => (
+        <li
+          key={sighting.id}
+          onClick={() => onSelect(sighting)}
+          className={`p-4 cursor-pointer transition hover:bg-gray-50 ${
+            selectedId === sighting.id ? "bg-orange-50" : ""
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-lg flex-shrink-0 ${
+                animalConfig[sighting.animal_type]?.color || "bg-gray-500"
+              }`}
+            >
+              {animalConfig[sighting.animal_type]?.emoji || "🐾"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-900">
+                  {animalConfig[sighting.animal_type]?.label || "동물"} 발견
+                </span>
+              </div>
+              {sighting.address && (() => {
+                const { main, detail } = parseAddress(sighting.address);
+                return (
+                  <>
+                    {main && <p className="text-sm text-gray-600 truncate">📍 {main}</p>}
+                    {detail && <p className="text-xs text-gray-400 truncate">└ {detail}</p>}
+                  </>
+                );
+              })()}
+              {sighting.description && (
+                <p className="text-sm text-gray-500 truncate mt-1">{sighting.description}</p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">{formatDate(sighting.created_at)}</p>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+
+// =============================================
+// 오른쪽 신고 목록 패널
+// =============================================
+function SightingListPanel({
+  sightings,
+  selectedId,
+  onSelect,
+  isExpanded,
+  onToggle,
+}: {
+  sightings: Sighting[];
+  selectedId: number | null;
+  onSelect: (sighting: Sighting) => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      {/* ===== PC: 오른쪽 사이드 패널 ===== */}
+      <div className="hidden lg:flex w-96 bg-white border-l border-gray-200 flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <h2 className="font-semibold text-lg text-gray-900">
+            신고 목록 ({sightings.length})
+          </h2>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {sightings.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <p className="text-4xl mb-4">🔍</p>
+              <p>이 지역에 신고가 없습니다</p>
+            </div>
+          ) : (
+            <SightingList sightings={sightings} selectedId={selectedId} onSelect={onSelect} />
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {sightings.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <p className="text-4xl mb-4">🔍</p>
-            <p>이 지역에 신고가 없습니다</p>
+      {/* ===== 모바일: 바텀시트 ===== */}
+      <div
+        className={`
+          lg:hidden fixed bottom-0 left-0 right-0 z-[900]
+          bg-white rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]
+          flex flex-col
+          transition-all duration-300 ease-in-out
+          ${isExpanded ? "h-[65dvh]" : "h-[22dvh]"}
+        `}
+      >
+        {/* 손잡이 + 헤더 */}
+        <div className="cursor-pointer select-none" onClick={onToggle}>
+          <div className="flex justify-center pt-2 pb-1">
+            <div className="w-10 h-1.5 rounded-full bg-gray-300" />
           </div>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {sightings.map((sighting) => (
-              <li
-                key={sighting.id}
-                onClick={() => onSelect(sighting)}
-                className={`p-4 cursor-pointer transition hover:bg-gray-50 ${
-                  selectedId === sighting.id ? "bg-orange-50" : ""
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-lg flex-shrink-0 ${
-                      animalConfig[sighting.animal_type]?.color || "bg-gray-500"
-                    }`}
-                  >
-                    {animalConfig[sighting.animal_type]?.emoji || "🐾"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">
-                        {animalConfig[sighting.animal_type]?.label || "동물"} 발견
-                      </span>
-                    </div>
-                    {sighting.address && (
-                      <p className="text-sm text-gray-600 truncate">📍 {sighting.address}</p>
-                    )}
-                    {sighting.description && (
-                      <p className="text-sm text-gray-500 truncate mt-1">{sighting.description}</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">{formatDate(sighting.created_at)}</p>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+
+          <div className="px-4 py-2 flex items-center justify-between">
+            <h2 className="font-semibold text-base text-gray-900">
+              신고 목록 ({sightings.length})
+            </h2>
+            <span className="text-gray-400 text-xs">
+              {isExpanded ? "▼ 접기" : "▲ 펼치기"}
+            </span>
+          </div>
+        </div>
+
+        {/* 목록 */}
+        <div className="flex-1 overflow-y-auto border-t border-gray-100">
+          {sightings.length === 0 ? (
+            <div className="p-5 text-center text-gray-500">
+              <p className="text-3xl mb-4">🔍</p>
+              <p>이 지역에 신고가 없습니다</p>
+            </div>
+          ) : (
+            <SightingList sightings={sightings} selectedId={selectedId} onSelect={onSelect} />
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -316,6 +413,8 @@ function SightingListPanel({
 // 메인 페이지
 // =============================================
 export default function Home() {
+  const [isListExpanded, setIsListExpanded] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -372,11 +471,13 @@ export default function Home() {
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
 
-      <main className="w-full h-screen bg-gray-50 flex flex-col">
+      <main className="w-full h-[100dvh] overflow-hidden bg-gray-50 flex flex-col">
         <Header currentUser={currentUser} authLoading={authLoading} />
 
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 relative">
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
+
+  {/* 지도 영역 */}
+          <div className="flex-1 min-h-0 relative">
             <div className="absolute top-4 left-4 z-[1000] flex gap-2">
               <button
                 onClick={() => setFilter("all")}
@@ -416,10 +517,13 @@ export default function Home() {
             )}
           </div>
 
+          {/* 목록 패널 - 모바일: 바텀시트 / PC: 오른쪽 사이드 */}
           <SightingListPanel
             sightings={visibleSightings}
             selectedId={selectedSightingId}
             onSelect={handleSightingSelect}
+            isExpanded={isListExpanded}
+            onToggle={() => setIsListExpanded(!isListExpanded)}
           />
         </div>
       </main>

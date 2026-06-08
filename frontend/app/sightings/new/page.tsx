@@ -259,36 +259,40 @@ export default function NewSightingPage() {
                 위치 선택
               </label>
 
-              <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100">
+              <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 relative">
                 {mapLoading ? (
                   <div className="h-64 flex items-center justify-center text-sm text-gray-500">
                     지도 로딩 중...
                   </div>
                 ) : (
-                  <KakaoMap
-                    center={mapCenter}
-                    level={3}
-                    style={{ width: "100%", height: "256px" }}
-                    onClick={handleMapClick}
-                    onDragEnd={(map) => {
-                      const center = map.getCenter();
-                      const lat = center.getLat();
-                      const lng = center.getLng();
-                      setLatitude(lat.toString());
-                      setLongitude(lng.toString());
-                      reverseGeocode(lat, lng);
-                    }}
-                  >
-                    {!isNaN(parsedLat) && !isNaN(parsedLng) && (
-                      <MapMarker position={{ lat: parsedLat, lng: parsedLng }} />
-                    )}
-                  </KakaoMap>
+                  <>
+                    <KakaoMap
+                      center={mapCenter}
+                      level={3}
+                      style={{ width: "100%", height: "256px" }}
+                      onDragEnd={(map) => {
+                        const center = map.getCenter();
+                        const lat = center.getLat();
+                        const lng = center.getLng();
+                        setLatitude(lat.toString());
+                        setLongitude(lng.toString());
+                        reverseGeocode(lat, lng);
+                      }}
+                    />
+
+                    {/* 화면 중앙 고정 핀 */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                      <div className="flex flex-col items-center">
+                        <span className="text-3xl drop-shadow-lg">📍</span>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
 
               <p className="mt-2 text-xs text-gray-500">
-  지도를 클릭하거나 움직여서 위치를 선택할 수 있습니다.
-</p>
+                지도를 클릭하거나 움직여서 위치를 선택할 수 있습니다.
+              </p>
             </div>
 
             {/* 주소 (자동) */}
