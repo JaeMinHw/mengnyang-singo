@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import exifr from "exifr";
+
 import Script from "next/script";
 import { Map as KakaoMap, MapMarker } from "react-kakao-maps-sdk";
 import { useRouter } from "next/navigation";
@@ -8,8 +10,33 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 
+// 두 좌표 사이 거리 계산 (미터 단위, Haversine 공식)
+function getDistanceInMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371000; // 지구 반지름 (미터)
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+
 export default function NewSightingPage() {
   const router = useRouter();
+  const [exifInfo, setExifInfo] = useState<string>("");
 
   const [animalType, setAnimalType] = useState("CAT");
   const [description, setDescription] = useState("");
@@ -18,10 +45,107 @@ export default function NewSightingPage() {
   const [address, setAddress] = useState("");
   const [locationDetail, setLocationDetail] = useState("");
 
+  const [hasChosenLocation, setHasChosenLocation] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
   const [mapLoading, setMapLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef<kakao.maps.Map | null>(null);
+
+
+  const updatePositionFromMapCenter = (map: kakao.maps.Map) => {
+    const center = map.getCenter();
+    const lat = center.getLat();
+    const lng = center.getLng();
+
+    setLatitude(lat.toString());
+    setLongitude(lng.toString());
+    reverseGeocode(lat, lng);
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+
+    try {
+      const exifData = await exifr.gps(file);
+
+      if (exifData && exifData.latitude && exifData.longitude) {
+        const exifLat = exifData.latitude;
+        const exifLng = exifData.longitude;
+
+        const userLat = parseFloat(latitude);
+        const userLng = parseFloat(longitude);
+
+        const hasValidUserPosition =
+          hasChosenLocation &&
+          !Number.isNaN(userLat) &&
+          !Number.isNaN(userLng);
+
+        // 사용자가 아직 신뢰 가능한 위치를 고르지 못했다면 EXIF 좌표를 바로 적용
+        if (!hasValidUserPosition) {
+          applyPosition(exifLat, exifLng);
+          setErrorMessage("");
+          setExifInfo(
+            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} · 현재 선택된 위치가 없어 사진 촬영 위치를 사용했습니다.`
+          );
+          return;
+        }
+
+        // 사용자 위치가 있으면 거리 비교
+        const distance = getDistanceInMeters(userLat, userLng, exifLat, exifLng);
+
+        // 차이가 작으면 사용자 좌표 유지
+        if (distance <= 500) {
+          setExifInfo(
+            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 현재 선택한 위치를 유지합니다.`
+          );
+          return;
+        }
+
+        // 차이가 크면 사용자에게 선택권 제공
+        const useExif = window.confirm(
+          `사진이 촬영된 위치가 현재 선택한 위치와 약 ${Math.round(distance)}m 떨어져 있습니다.\n\n사진 촬영 위치로 변경하시겠습니까?`
+        );
+
+        if (useExif) {
+          applyPosition(exifLat, exifLng);
+          setExifInfo(
+            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 사진 촬영 위치를 적용했습니다.`
+          );
+        } else {
+          setExifInfo(
+            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 현재 선택한 위치를 유지합니다.`
+          );
+        }
+      } else {
+        setExifInfo("📸 EXIF GPS 정보 없음");
+      }
+    } catch (err) {
+      console.log("📸 EXIF 읽기 실패 (무시 가능):", err);
+      setExifInfo("📸 EXIF 읽기 실패 (무시 가능)");
+    }
+  };
+
+  const handleImageRemove = () => {
+    setImageFile(null);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`;
 
@@ -41,6 +165,21 @@ export default function NewSightingPage() {
     });
   }, []);
 
+  const applyPosition = useCallback(
+  (lat: number, lng: number) => {
+    setLatitude(lat.toString());
+    setLongitude(lng.toString());
+    reverseGeocode(lat, lng);
+    setHasChosenLocation(true);
+
+    if (mapRef.current) {
+      const target = new window.kakao.maps.LatLng(lat, lng);
+      mapRef.current.setCenter(target);
+    }
+  },
+  [reverseGeocode]
+);
+
   // 현재 위치 가져오기
   const handleUseCurrentLocation = () => {
     setErrorMessage("");
@@ -56,9 +195,7 @@ export default function NewSightingPage() {
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        setLatitude(lat.toString());
-        setLongitude(lng.toString());
-        reverseGeocode(lat, lng);
+        applyPosition(lat, lng);
         setLocationLoading(false);
       },
       (error) => {
@@ -241,6 +378,50 @@ export default function NewSightingPage() {
               />
             </div>
 
+                        {/* 사진 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                사진 <span className="text-gray-400">(선택)</span>
+              </label>
+              {exifInfo && (
+                <p className="text-xs text-blue-500 mt-1">{exifInfo}</p>
+              )}
+
+              {imagePreview ? (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="미리보기"
+                    className="w-full h-48 object-cover rounded-xl border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleImageRemove}
+                    className="absolute top-2 right-2 w-7 h-7 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-32 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                >
+                  <span className="text-2xl mb-1">📷</span>
+                  <span className="text-sm">사진을 선택해주세요</span>
+                </button>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </div>
+
             {/* 현재 위치 버튼 */}
             <div>
               <button
@@ -270,13 +451,14 @@ export default function NewSightingPage() {
                       center={mapCenter}
                       level={3}
                       style={{ width: "100%", height: "256px" }}
-                      onDragEnd={(map) => {
-                        const center = map.getCenter();
-                        const lat = center.getLat();
-                        const lng = center.getLng();
-                        setLatitude(lat.toString());
-                        setLongitude(lng.toString());
-                        reverseGeocode(lat, lng);
+                      onCreate={(map) => {
+                        mapRef.current = map;
+                      }}
+                      onDragEnd={() => {
+                        setHasChosenLocation(true);
+                      }}
+                      onIdle={(map) => {
+                        updatePositionFromMapCenter(map);
                       }}
                     />
 
