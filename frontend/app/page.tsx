@@ -84,16 +84,23 @@ function MapWithLogic({
   const map = useMap();
   const [selectedMarker, setSelectedMarker] = useState<Sighting | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<ClusterInfo | null>(null);
+  const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const markerRef = useRef(new Map<kakao.maps.Marker, number>());
-  const focusMarkerWithOffset = (position: kakao.maps.LatLng) => {
+  const focusMarkerWithOffset = (position: kakao.maps.LatLng, hasImage: boolean = false) => {
     if (!map) return;
 
     map.setLevel(3);
     map.setCenter(position);
 
-    // 반응형 오프셋: 모바일에서는 더 아래로, PC에서는 조금만
-    const panOffsetY = window.innerWidth < 1024 ? -140 : -100;
+    let panOffsetY: number;
 
+    if (window.innerWidth < 1024) {
+      // 모바일: 이미지 있으면 더 내리고, 없으면 덜 내림
+      panOffsetY = hasImage ? -140 : -80;
+    } else {
+      // PC: 이미지 있으면 더 내리고, 없으면 덜 내림
+      panOffsetY = hasImage ? -100 : -60;
+    }
 
     setTimeout(() => {
       map.panBy(0, panOffsetY);
@@ -141,6 +148,8 @@ function MapWithLogic({
   const handleMapClick = () => {
     setSelectedMarker(null);
     setSelectedCluster(null);
+    setLastSelectedId(null);
+
   };
 
   useEffect(() => {
@@ -152,6 +161,21 @@ function MapWithLogic({
   }, [map]);
 
   useEffect(() => {
+    if (!map) return;
+
+    const handleZoomChanged = () => {
+      setSelectedMarker(null);
+      setSelectedCluster(null);
+    };
+
+    kakao.maps.event.addListener(map, "zoom_changed", handleZoomChanged);
+
+    return () => {
+      kakao.maps.event.removeListener(map, "zoom_changed", handleZoomChanged);
+    };
+  }, [map]);
+
+  useEffect(() => {
     if (!map || !focusedSighting) return;
 
     const targetPosition = new kakao.maps.LatLng(
@@ -159,9 +183,11 @@ function MapWithLogic({
       Number(focusedSighting.longitude)
     );
 
-    focusMarkerWithOffset(targetPosition);
+    focusMarkerWithOffset(targetPosition, !!focusedSighting.image_url);
     setSelectedCluster(null);
     setSelectedMarker(focusedSighting);
+    setLastSelectedId(focusedSighting.id);
+
   }, [map, focusedSighting]);
 
   const handleClusterClick = (_target: kakao.maps.MarkerClusterer, cluster: kakao.maps.Cluster) => {
@@ -189,9 +215,10 @@ function MapWithLogic({
       Number(sighting.longitude)
     );
 
-    focusMarkerWithOffset(targetPosition);
+    focusMarkerWithOffset(targetPosition, !!sighting.image_url);
     setSelectedCluster(null);
     setSelectedMarker(sighting);
+    setLastSelectedId(sighting.id);
   };
 
   return (
@@ -203,9 +230,10 @@ function MapWithLogic({
             position={{ lat: sighting.latitude, lng: sighting.longitude }}
             onCreate={(marker) => markerRef.current.set(marker, sighting.id)}
             onClick={(marker) => {
-              focusMarkerWithOffset(marker.getPosition());
+              focusMarkerWithOffset(marker.getPosition(), !!sighting.image_url);
               setSelectedMarker(sighting);
               setSelectedCluster(null);
+              setLastSelectedId(sighting.id);
               onMarkerSelect(sighting);
             }}
             image={{
@@ -215,7 +243,22 @@ function MapWithLogic({
           />
         ))}
       </MarkerClusterer>
+      {/* 마지막으로 선택한 마커 하이라이트 링 */}
+        {lastSelectedId && !selectedMarker && (() => {
+          const target = sightings.find((s) => s.id === lastSelectedId);
+          if (!target) return null;
 
+          return (
+            <CustomOverlayMap
+              position={{ lat: target.latitude, lng: target.longitude }}
+              xAnchor={0.5}
+              yAnchor={0.89}
+            >
+              <div className="w-11 h-11 rounded-full border-[3px] border-orange-500 bg-orange-500/20 pointer-events-none" />
+
+            </CustomOverlayMap>
+          );
+        })()}
       {selectedMarker && (
         <CustomOverlayMap
             position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
@@ -275,25 +318,52 @@ function MapWithLogic({
                   <span className="text-sm font-bold">✕</span>
                 </button>
               </div>
-              <ul className="overflow-y-auto divide-y divide-gray-50">
+              <ul className="overflow-y-auto divide-y divide-gray-50" onWheel={(e) => e.stopPropagation()}>
                 {selectedCluster.markers.map((marker) => (
-                  <li key={marker.id} className="cursor-pointer hover:bg-slate-50 active:bg-slate-100 p-4 transition-all duration-200 group" onClick={() => handleListItemClick(marker)}>
+                  <li
+                    key={marker.id}
+                    className="cursor-pointer hover:bg-slate-50 active:bg-slate-100 p-4 transition-all duration-200 group"
+                    onClick={() => handleListItemClick(marker)}
+                  >
                     <div className="flex justify-between items-center mb-1.5">
-                      <div className={`text-sm font-semibold flex items-center gap-1.5 ${marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"}`}>
-                        {animalConfig[marker.animal_type]?.emoji} {animalConfig[marker.animal_type]?.label || "동물"}
+                      <div
+                        className={`text-sm font-semibold flex items-center gap-1.5 ${
+                          marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"
+                        }`}
+                      >
+                        {animalConfig[marker.animal_type]?.emoji}{" "}
+                        {animalConfig[marker.animal_type]?.label || "동물"}
                       </div>
-                      <span className="text-[11px] text-gray-400 group-hover:text-gray-500">{formatDateShort(marker.created_at)}</span>
+                      <span className="text-[11px] text-gray-400 group-hover:text-gray-500">
+                        {formatDateShort(marker.created_at)}
+                      </span>
                     </div>
+
                     {marker.address && (() => {
                       const { main, detail } = parseAddress(marker.address);
                       return (
-                        <div className="text-xs text-gray-500 mb-1">
+                        <div className="text-xs text-gray-500 mb-2">
                           {main && <p>📍 {main}</p>}
                           {detail && <p className="text-gray-400">└ {detail}</p>}
                         </div>
                       );
                     })()}
-                    <div className="text-sm text-gray-600 leading-snug line-clamp-2">{marker.description || "등록된 특징이 없습니다."}</div>
+
+                    {marker.image_url && (
+                      <img
+                        src={marker.image_url}
+                        alt="신고 썸네일"
+                        className="w-full h-20 object-cover rounded-lg border border-gray-200 mb-2 cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onImageClick(marker.image_url!);
+                        }}
+                      />
+                    )}
+
+                    <div className="text-sm text-gray-600 leading-snug line-clamp-2">
+                      {marker.description || "등록된 특징이 없습니다."}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -468,6 +538,8 @@ export default function Home() {
   const [filter, setFilter] = useState<string>("all");
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
   const [focusedSighting, setFocusedSighting] = useState<Sighting | null>(null);
+  const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
+
 
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
