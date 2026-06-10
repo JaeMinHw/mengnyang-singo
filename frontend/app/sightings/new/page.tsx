@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import exifr from "exifr";
-
 import Script from "next/script";
-import { Map as KakaoMap, MapMarker } from "react-kakao-maps-sdk";
+import { Map as KakaoMap } from "react-kakao-maps-sdk";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
@@ -36,7 +35,6 @@ function getDistanceInMeters(
 
 export default function NewSightingPage() {
   const router = useRouter();
-  const [exifInfo, setExifInfo] = useState<string>("");
 
   const [animalType, setAnimalType] = useState("CAT");
   const [description, setDescription] = useState("");
@@ -95,9 +93,6 @@ export default function NewSightingPage() {
         if (!hasValidUserPosition) {
           applyPosition(exifLat, exifLng);
           setErrorMessage("");
-          setExifInfo(
-            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} · 현재 선택된 위치가 없어 사진 촬영 위치를 사용했습니다.`
-          );
           return;
         }
 
@@ -106,9 +101,6 @@ export default function NewSightingPage() {
 
         // 차이가 작으면 사용자 좌표 유지
         if (distance <= 500) {
-          setExifInfo(
-            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 현재 선택한 위치를 유지합니다.`
-          );
           return;
         }
 
@@ -119,20 +111,15 @@ export default function NewSightingPage() {
 
         if (useExif) {
           applyPosition(exifLat, exifLng);
-          setExifInfo(
-            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 사진 촬영 위치를 적용했습니다.`
-          );
+
         } else {
-          setExifInfo(
-            `📸 EXIF GPS 발견: ${exifLat}, ${exifLng} (거리: ${Math.round(distance)}m) · 현재 선택한 위치를 유지합니다.`
-          );
         }
       } else {
-        setExifInfo("📸 EXIF GPS 정보 없음");
+
       }
     } catch (err) {
       console.log("📸 EXIF 읽기 실패 (무시 가능):", err);
-      setExifInfo("📸 EXIF 읽기 실패 (무시 가능)");
+
     }
   };
 
@@ -244,15 +231,7 @@ export default function NewSightingPage() {
   }, []);
 
   // 지도 클릭 시 좌표 변경 + 주소 변환
-  const handleMapClick = (_: any, mouseEvent: any) => {
-    const latlng = mouseEvent.latLng;
-    const lat = latlng.getLat();
-    const lng = latlng.getLng();
 
-    setLatitude(lat.toString());
-    setLongitude(lng.toString());
-    reverseGeocode(lat, lng);
-  };
   const uploadImage = async (): Promise<string | null> => {
     if (!imageFile) return null;
 
@@ -404,9 +383,7 @@ export default function NewSightingPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 사진 <span className="text-gray-400">(선택)</span>
               </label>
-              {exifInfo && (
-                <p className="text-xs text-blue-500 mt-1">{exifInfo}</p>
-              )}
+
 
               {imagePreview ? (
                 <div className="relative">
