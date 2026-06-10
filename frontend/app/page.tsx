@@ -10,6 +10,7 @@ interface Sighting {
   id: number;
   animal_type: string;
   description: string | null;
+  image_url: string | null;
   latitude: number;
   longitude: number;
   address: string | null;
@@ -72,17 +73,32 @@ function MapWithLogic({
   focusedSighting,
   onMarkerSelect,
   onBoundsChange,
+  onImageClick,
 }: {
   sightings: Sighting[];
   focusedSighting: Sighting | null;
   onMarkerSelect: (sighting: Sighting) => void;
   onBoundsChange: (visibleSightings: Sighting[]) => void;
+  onImageClick: (imageUrl: string) => void;
 }) {
   const map = useMap();
   const [selectedMarker, setSelectedMarker] = useState<Sighting | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<ClusterInfo | null>(null);
   const markerRef = useRef(new Map<kakao.maps.Marker, number>());
+  const focusMarkerWithOffset = (position: kakao.maps.LatLng) => {
+    if (!map) return;
 
+    map.setLevel(3);
+    map.setCenter(position);
+
+    // 반응형 오프셋: 모바일에서는 더 아래로, PC에서는 조금만
+    const panOffsetY = window.innerWidth < 1024 ? -140 : -100;
+
+
+    setTimeout(() => {
+      map.panBy(0, panOffsetY);
+    }, 0);
+  };
   // 현재 지도 범위 안의 신고만 계산해서 부모에게 전달
   const updateVisibleSightings = useCallback(() => {
     if (!map) return;
@@ -143,8 +159,7 @@ function MapWithLogic({
       Number(focusedSighting.longitude)
     );
 
-    map.setLevel(3);
-    map.setCenter(targetPosition);
+    focusMarkerWithOffset(targetPosition);
     setSelectedCluster(null);
     setSelectedMarker(focusedSighting);
   }, [map, focusedSighting]);
@@ -168,9 +183,13 @@ function MapWithLogic({
 
   const handleListItemClick = (sighting: Sighting) => {
     if (!map) return;
-    const targetPosition = new kakao.maps.LatLng(Number(sighting.latitude), Number(sighting.longitude));
-    map.setLevel(3);
-    map.setCenter(targetPosition);
+
+    const targetPosition = new kakao.maps.LatLng(
+      Number(sighting.latitude),
+      Number(sighting.longitude)
+    );
+
+    focusMarkerWithOffset(targetPosition);
     setSelectedCluster(null);
     setSelectedMarker(sighting);
   };
@@ -184,8 +203,7 @@ function MapWithLogic({
             position={{ lat: sighting.latitude, lng: sighting.longitude }}
             onCreate={(marker) => markerRef.current.set(marker, sighting.id)}
             onClick={(marker) => {
-              map.setLevel(3);
-              map.setCenter(marker.getPosition());
+              focusMarkerWithOffset(marker.getPosition());
               setSelectedMarker(sighting);
               setSelectedCluster(null);
               onMarkerSelect(sighting);
@@ -199,9 +217,13 @@ function MapWithLogic({
       </MarkerClusterer>
 
       {selectedMarker && (
-        <CustomOverlayMap position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }} yAnchor={1.3} clickable={true}>
+        <CustomOverlayMap
+            position={{ lat: selectedMarker.latitude, lng: selectedMarker.longitude }}
+            yAnchor={selectedMarker.image_url ? 1.16 : 1.3}
+            clickable={true}
+          >
           <div className="relative flex flex-col items-center drop-shadow-xl">
-            <div className="p-4 bg-white rounded-2xl border border-gray-100 min-w-[200px] z-10">
+            <div className="p-4 bg-white rounded-2xl border border-gray-100 w-[calc(100vw-2rem)] max-w-xs lg:min-w-[200px] z-10">
               <div className="flex justify-between items-start mb-2">
                 <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${selectedMarker.animal_type === "DOG" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
                   {animalConfig[selectedMarker.animal_type]?.emoji} {animalConfig[selectedMarker.animal_type]?.label || "동물"}
@@ -219,12 +241,23 @@ function MapWithLogic({
                   </div>
                 );
               })()}
+
+              {selectedMarker.image_url && (
+                <img
+                  src={selectedMarker.image_url}
+                  alt="신고 이미지"
+                  className="w-full h-32 object-cover rounded-xl border border-gray-200 mt-2 cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => onImageClick(selectedMarker.image_url!)}
+                />
+              )}
+
               <p className="text-sm text-gray-700 mt-1 leading-relaxed line-clamp-3">
                 {selectedMarker.description || "등록된 특징 설명이 없습니다."}
               </p>
               <div className="text-[11px] text-gray-400 mt-3 text-right">{formatDateShort(selectedMarker.created_at)}</div>
             </div>
-            <div className="w-4 h-4 bg-white transform rotate-45 -translate-y-2 border-b border-r border-gray-100 -z-0"></div>
+            <div className="w-4 h-4 bg-white transform rotate-45 -translate-y-1 border-b border-r border-gray-100 -z-0"></div>
+
           </div>
         </CustomOverlayMap>
       )}
@@ -232,7 +265,7 @@ function MapWithLogic({
       {selectedCluster && (
         <CustomOverlayMap position={selectedCluster.center} yAnchor={1.15} clickable={true}>
           <div className="relative flex flex-col items-center drop-shadow-2xl">
-            <div className="bg-white rounded-2xl border border-gray-100 w-80 max-h-[340px] flex flex-col overflow-hidden z-10">
+            <div className="bg-white rounded-2xl border border-gray-100 w-[calc(100vw-2rem)] max-w-80 max-h-[45dvh] lg:w-80 lg:max-h-[340px] flex flex-col overflow-hidden z-10">
               <div className="bg-gray-50/90 backdrop-blur-sm p-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-20">
                 <div className="font-bold text-gray-800 flex items-center gap-2 text-sm">
                   📋 이 주변 발견 신고
@@ -301,24 +334,36 @@ function SightingList({
             >
               {animalConfig[sighting.animal_type]?.emoji || "🐾"}
             </div>
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-900">
                   {animalConfig[sighting.animal_type]?.label || "동물"} 발견
                 </span>
               </div>
+
+              {sighting.image_url && (
+                <img
+                  src={sighting.image_url}
+                  alt="신고 썸네일"
+                  className="w-full h-24 object-cover rounded-xl border border-gray-200 mt-2"
+                />
+              )}
+
               {sighting.address && (() => {
                 const { main, detail } = parseAddress(sighting.address);
                 return (
                   <>
-                    {main && <p className="text-sm text-gray-600 truncate">📍 {main}</p>}
+                    {main && <p className="text-sm text-gray-600 truncate mt-2">📍 {main}</p>}
                     {detail && <p className="text-xs text-gray-400 truncate">└ {detail}</p>}
                   </>
                 );
               })()}
+
               {sighting.description && (
                 <p className="text-sm text-gray-500 truncate mt-1">{sighting.description}</p>
               )}
+
               <p className="text-xs text-gray-400 mt-1">{formatDate(sighting.created_at)}</p>
             </div>
           </div>
@@ -374,7 +419,7 @@ function SightingListPanel({
           bg-white rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]
           flex flex-col
           transition-all duration-300 ease-in-out
-          ${isExpanded ? "h-[65dvh]" : "h-[22dvh]"}
+          ${isExpanded ? "h-[65dvh]" : "h-[12dvh]"}
         `}
       >
         {/* 손잡이 + 헤더 */}
@@ -414,7 +459,7 @@ function SightingListPanel({
 // =============================================
 export default function Home() {
   const [isListExpanded, setIsListExpanded] = useState(false);
-
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -470,7 +515,27 @@ export default function Home() {
   return (
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
+            {/* 이미지 풀스크린 모달 */}
+      {fullImageUrl && (
+        <div
+          className="fixed inset-0 z-[2000] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setFullImageUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 text-white rounded-full flex items-center justify-center hover:bg-white/40 transition-colors text-lg"
+            onClick={() => setFullImageUrl(null)}
+          >
+            ✕
+          </button>
 
+          <img
+            src={fullImageUrl}
+            alt="신고 이미지 크게 보기"
+            className="max-w-full max-h-[85vh] object-contain rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
       <main className="w-full h-[100dvh] overflow-hidden bg-gray-50 flex flex-col">
         <Header currentUser={currentUser} authLoading={authLoading} />
 
@@ -512,6 +577,7 @@ export default function Home() {
                   onBoundsChange={handleBoundsChange}
                   focusedSighting={focusedSighting}
                   onMarkerSelect={handleMarkerSelect}
+                  onImageClick={(url) => setFullImageUrl(url)}
                 />
               </KakaoMap>
             )}

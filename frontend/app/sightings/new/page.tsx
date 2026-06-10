@@ -253,7 +253,24 @@ export default function NewSightingPage() {
     setLongitude(lng.toString());
     reverseGeocode(lat, lng);
   };
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile) return null;
 
+    const formData = new FormData();
+    formData.append("file", imageFile);
+
+    const response = await api.post<{ image_url: string }>(
+      "/upload/image",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data.image_url;
+  };
   // 신고 등록
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -282,10 +299,14 @@ export default function NewSightingPage() {
       : address;
 
     try {
+      // 1. 이미지가 있으면 먼저 업로드
+      const uploadedImageUrl = await uploadImage();
+
+      // 2. 신고 등록
       await api.post("/sightings", {
         animal_type: animalType,
         description: description || null,
-        image_url: null,
+        image_url: uploadedImageUrl,
         latitude: lat,
         longitude: lng,
         address: fullAddress || null,

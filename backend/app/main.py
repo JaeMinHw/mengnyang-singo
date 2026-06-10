@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import health, sighting
 from app.core.config import settings
-from app.api import health, sighting, auth  # auth 추가!
+from app.api import health, sighting, auth, upload
+
+from fastapi.staticfiles import StaticFiles
+import os
 
 app = FastAPI(
     title="멍냥신고 API",
@@ -23,6 +25,11 @@ app.add_middleware(
 app.include_router(health.router, tags=["Health"])
 app.include_router(sighting.router, tags=["Sighting"])
 app.include_router(auth.router, tags=["Auth"])  # 방금 만든 라우터 연결!
+app.include_router(upload.router, tags=["Upload"])
+
+# 업로드 이미지 정적 파일 서빙
+os.makedirs("/app/uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="/app/uploads"), name="uploads")
 
 @app.get("/")
 def root():
