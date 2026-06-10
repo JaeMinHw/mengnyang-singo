@@ -8,6 +8,8 @@ import Header from "@/components/Header";
 
 interface Sighting {
   id: number;
+  user_id: number;
+  user_nickname: string | null;
   animal_type: string;
   description: string | null;
   image_url: string | null;
@@ -483,10 +485,11 @@ function SightingDetailModal({
             <p className="text-xs text-gray-400">
               신고 번호: #{sighting.id}
             </p>
-            {/* 나중에 추가될 것들 */}
-            {/* <p className="text-xs text-gray-400">작성자: {닉네임}</p> */}
-            {/* <button>채팅하기</button> */}
-            {/* <button>상태 변경</button> */}
+            {sighting.user_nickname && (
+              <p className="text-xs text-gray-500">
+                작성자: {sighting.user_nickname}
+              </p>
+            )}
           </div>
 
           {/* 닫기 버튼 */}
@@ -560,7 +563,10 @@ function SightingList({
                 <p className="text-sm text-gray-500 truncate mt-1">{sighting.description}</p>
               )}
 
-              <p className="text-xs text-gray-400 mt-1">{formatDate(sighting.created_at)}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {formatDate(sighting.created_at)}
+                {sighting.user_nickname && ` · ${sighting.user_nickname}`}
+              </p>
             </div>
           </div>
         </li>
