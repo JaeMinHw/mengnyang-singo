@@ -11,6 +11,24 @@ from app.schemas.sighting import SightingCreate, SightingResponse
 router = APIRouter()
 
 
+def sighting_to_response(sighting: Sighting) -> dict:
+    """Sighting ORM 객체를 응답용 dict로 변환 (닉네임 포함)"""
+    return {
+        "id": sighting.id,
+        "user_id": sighting.user_id,
+        "user_nickname": sighting.user.nickname if sighting.user else None,
+        "animal_type": sighting.animal_type,
+        "description": sighting.description,
+        "image_url": sighting.image_url,
+        "latitude": sighting.latitude,
+        "longitude": sighting.longitude,
+        "address": sighting.address,
+        "status": sighting.status,
+        "created_at": sighting.created_at,
+        "updated_at": sighting.updated_at,
+    }
+
+
 @router.post("/sightings", response_model=SightingResponse)
 def create_sighting(
     data: SightingCreate,
@@ -24,7 +42,7 @@ def create_sighting(
     db.add(sighting)
     db.commit()
     db.refresh(sighting)
-    return sighting
+    return sighting_to_response(sighting)
 
 
 @router.get("/sightings", response_model=List[SightingResponse])
@@ -40,7 +58,8 @@ def get_sightings(
     if status:
         query = query.filter(Sighting.status == status)
 
-    return query.order_by(Sighting.created_at.desc()).all()
+    sightings = query.order_by(Sighting.created_at.desc()).all()
+    return [sighting_to_response(s) for s in sightings]
 
 
 @router.get("/sightings/nearby/search")
@@ -55,7 +74,7 @@ def get_nearby_sightings(
         Sighting.longitude.between(lng - radius, lng + radius)
     ).order_by(Sighting.created_at.desc()).all()
 
-    return sightings
+    return [sighting_to_response(s) for s in sightings]
 
 
 @router.get("/sightings/{sighting_id}", response_model=SightingResponse)
@@ -63,4 +82,4 @@ def get_sighting(sighting_id: int, db: Session = Depends(get_db)):
     sighting = db.query(Sighting).filter(Sighting.id == sighting_id).first()
     if not sighting:
         raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다")
-    return sighting
+    return sighting_to_response(sighting)
