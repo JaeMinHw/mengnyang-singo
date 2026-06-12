@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 
 class SightingCreate(BaseModel):
@@ -33,3 +33,6 @@ class SightingResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+class SightingStatusUpdate(BaseModel):
+    status: Literal["SPOTTED", "PROTECTING", "FOUND"]

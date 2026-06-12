@@ -1,29 +1,48 @@
+"use client";
+
+import { useState } from "react";
 import type { Sighting } from "@/types/sighting";
-import { animalConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
+import { animalConfig, statusConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
+
 
 interface SightingDetailModalProps {
   sighting: Sighting;
+  currentUserId: number | null;
   onClose: () => void;
   onImageClick: (imageUrl: string) => void;
+  onStatusChange: (sightingId: number, newStatus: string) => void;
 }
+
+
+
+const ALL_STATUSES = ["SPOTTED", "PROTECTING", "FOUND"];
 
 export default function SightingDetailModal({
   sighting,
+  currentUserId,
   onClose,
   onImageClick,
+  onStatusChange,
 }: SightingDetailModalProps) {
   const { main, detail } = parseAddress(sighting.address);
+  const [statusLoading, setStatusLoading] = useState(false);
 
-  const statusLabels: Record<string, { label: string; color: string }> = {
-    SPOTTED: { label: "목격됨", color: "bg-yellow-100 text-yellow-700" },
-    PROTECTING: { label: "보호 중", color: "bg-blue-100 text-blue-700" },
-    SHELTERED: { label: "보호소 입소", color: "bg-purple-100 text-purple-700" },
-    ADOPTED: { label: "입양 완료", color: "bg-green-100 text-green-700" },
-  };
-
-  const statusInfo = statusLabels[sighting.status] || {
+  const statusInfo = statusConfig[sighting.status] || {
     label: sighting.status,
     color: "bg-gray-100 text-gray-700",
+    bgColor: "bg-gray-500",
+  };
+
+  const isOwner = currentUserId !== null && currentUserId === sighting.user_id;
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (statusLoading) return;
+    setStatusLoading(true);
+    try {
+      await onStatusChange(sighting.id, newStatus);
+    } finally {
+      setStatusLoading(false);
+    }
   };
 
   return (
@@ -49,6 +68,7 @@ export default function SightingDetailModal({
         )}
 
         <div className="p-5 space-y-4">
+          {/* 상단: 동물 종류 + 상태 뱃지 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div
@@ -73,6 +93,7 @@ export default function SightingDetailModal({
             </span>
           </div>
 
+          {/* 주소 */}
           {(main || detail) && (
             <div className="bg-gray-50 rounded-xl p-3">
               {main && <p className="text-sm text-gray-700">📍 {main}</p>}
@@ -80,6 +101,7 @@ export default function SightingDetailModal({
             </div>
           )}
 
+          {/* 설명 */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">설명</p>
             <p className="text-sm text-gray-600 leading-relaxed">
@@ -87,6 +109,28 @@ export default function SightingDetailModal({
             </p>
           </div>
 
+          {/* 작성자 전용: 상태 변경 */}
+          {isOwner && (
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-2">상태 변경</p>
+              <div className="flex gap-2 flex-wrap">
+                {ALL_STATUSES.filter((s) => s !== sighting.status).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleStatusChange(s)}
+                    disabled={statusLoading}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition
+                      ${statusConfig[s]?.color || "bg-gray-100 text-gray-700"}
+                      border-transparent hover:opacity-80 disabled:opacity-50`}
+                  >
+                    {statusLoading ? "변경 중..." : `→ ${statusConfig[s]?.label}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 신고 번호 + 작성자 */}
           <div className="border-t border-gray-100 pt-3 space-y-2">
             <p className="text-xs text-gray-400">신고 번호: #{sighting.id}</p>
             {sighting.user_nickname && (
@@ -94,6 +138,7 @@ export default function SightingDetailModal({
             )}
           </div>
 
+          {/* 닫기 */}
           <button
             onClick={onClose}
             className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"

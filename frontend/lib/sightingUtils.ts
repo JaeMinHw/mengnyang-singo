@@ -7,6 +7,15 @@ export const animalConfig: Record<
   OTHER: { emoji: "🐾", color: "bg-purple-500", label: "기타" },
 };
 
+export const statusConfig: Record<
+  string,
+  { label: string; color: string; bgColor: string }
+> = {
+  SPOTTED: { label: "목격", color: "bg-yellow-100 text-yellow-700", bgColor: "bg-yellow-500" },
+  PROTECTING: { label: "보호 중", color: "bg-blue-100 text-blue-700", bgColor: "bg-blue-500" },
+  FOUND: { label: "찾음", color: "bg-green-100 text-green-700", bgColor: "bg-green-500" },
+};
+
 export const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString("ko-KR", {
     year: "numeric",

@@ -3,7 +3,8 @@
 import { MapMarker, MarkerClusterer, CustomOverlayMap, useMap } from "react-kakao-maps-sdk";
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { Sighting, ClusterInfo } from "@/types/sighting";
-import { animalConfig, formatDateShort, parseAddress } from "@/lib/sightingUtils";
+import { animalConfig, statusConfig, formatDateShort, parseAddress } from "@/lib/sightingUtils";
+
 
 interface MapWithLogicProps {
   sightings: Sighting[];
@@ -212,16 +213,27 @@ export default function MapWithLogic({
           <div className="relative flex flex-col items-center drop-shadow-xl">
             <div className="p-4 bg-white rounded-2xl border border-gray-100 w-[calc(100vw-2rem)] max-w-xs lg:min-w-[200px] z-10">
               <div className="flex justify-between items-start mb-2">
-                <span
-                  className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                    selectedMarker.animal_type === "DOG"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-orange-100 text-orange-700"
-                  }`}
-                >
-                  {animalConfig[selectedMarker.animal_type]?.emoji}{" "}
-                  {animalConfig[selectedMarker.animal_type]?.label || "동물"}
-                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <span
+                    className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                      selectedMarker.animal_type === "DOG"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-orange-100 text-orange-700"
+                    }`}
+                  >
+                    {animalConfig[selectedMarker.animal_type]?.emoji}{" "}
+                    {animalConfig[selectedMarker.animal_type]?.label || "동물"}
+                  </span>
+
+                  <span
+                    className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                      statusConfig[selectedMarker.status]?.color || "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {statusConfig[selectedMarker.status]?.label || selectedMarker.status}
+                  </span>
+                </div>
+
                 <button
                   onClick={() => setSelectedMarker(null)}
                   className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors ml-4"
@@ -297,14 +309,25 @@ export default function MapWithLogic({
                     onClick={() => handleListItemClick(marker)}
                   >
                     <div className="flex justify-between items-center mb-1.5">
-                      <div
-                        className={`text-sm font-semibold flex items-center gap-1.5 ${
-                          marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"
-                        }`}
-                      >
-                        {animalConfig[marker.animal_type]?.emoji}{" "}
-                        {animalConfig[marker.animal_type]?.label || "동물"}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div
+                          className={`text-sm font-semibold flex items-center gap-1.5 ${
+                            marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"
+                          }`}
+                        >
+                          {animalConfig[marker.animal_type]?.emoji}{" "}
+                          {animalConfig[marker.animal_type]?.label || "동물"}
+                        </div>
+
+                        <span
+                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                            statusConfig[marker.status]?.color || "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {statusConfig[marker.status]?.label || marker.status}
+                        </span>
                       </div>
+
                       <span className="text-[11px] text-gray-400 group-hover:text-gray-500">
                         {formatDateShort(marker.created_at)}
                       </span>

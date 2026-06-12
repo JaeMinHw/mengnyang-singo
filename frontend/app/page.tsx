@@ -2,12 +2,15 @@
 
 import { Map as KakaoMap } from "react-kakao-maps-sdk";
 import Script from "next/script";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+
 
 import api from "@/lib/api";
 import Header from "@/components/Header";
 import type { Sighting, ClusterInfo, CurrentUser } from "@/types/sighting";
-import { animalConfig, formatDate, formatDateShort, parseAddress } from "@/lib/sightingUtils";
+import { animalConfig, statusConfig } from "@/lib/sightingUtils";
+
+
 import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
 import MapWithLogic from "@/components/MapWithLogic";
@@ -30,7 +33,7 @@ export default function Home() {
   const [focusedSighting, setFocusedSighting] = useState<Sighting | null>(null);
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
-
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
@@ -58,13 +61,26 @@ export default function Home() {
       }
   }, []);
 
-  const filteredSightings = filter === "all"
-    ? sightings
-    : sightings.filter((s) => s.animal_type === filter);
+  const filteredSightings = useMemo(() => {
+    return sightings.filter((s) => {
+      const matchAnimal = filter === "all" || s.animal_type === filter;
+      const matchStatus = statusFilter === "all" || s.status === statusFilter;
+      return matchAnimal && matchStatus;
+    });
+  }, [sightings, filter, statusFilter]);
 
   // MapWithLogic에서 bounds 변경 시 호출됨
   const handleBoundsChange = useCallback((visible: Sighting[]) => {
-    setVisibleSightings(visible);
+    setVisibleSightings((prev) => {
+      // ID 목록이 같으면 업데이트 안 함
+      if (
+        prev.length === visible.length &&
+        prev.every((s, i) => s.id === visible[i].id)
+      ) {
+        return prev;
+      }
+      return visible;
+    });
   }, []);
 
   const handleSightingSelect = (sighting: Sighting) => {
@@ -76,6 +92,28 @@ export default function Home() {
     setSelectedSightingId(sighting.id);
   };
 
+  const handleStatusChange = async (sightingId: number, newStatus: string) => {
+    try {
+      const response = await api.patch<Sighting>(`/sightings/${sightingId}/status`, {
+        status: newStatus,
+      });
+
+      const updated = response.data;
+
+      // sightings 배열 갱신
+      setSightings((prev) =>
+        prev.map((s) => (s.id === sightingId ? updated : s))
+      );
+
+      // 상세 모달도 즉시 갱신
+      setDetailSighting(updated);
+
+    } catch (err) {
+      console.error("상태 변경 실패:", err);
+      alert("상태 변경에 실패했습니다. 다시 시도해주세요.");
+    }
+  };
+
   return (
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
@@ -84,11 +122,13 @@ export default function Home() {
         {detailSighting && (
           <SightingDetailModal
             sighting={detailSighting}
+            currentUserId={currentUser?.id ?? null}
             onClose={() => setDetailSighting(null)}
             onImageClick={(url) => {
               setDetailSighting(null);
               setFullImageUrl(url);
             }}
+            onStatusChange={handleStatusChange}
           />
         )}
       {fullImageUrl && (
@@ -118,27 +158,55 @@ export default function Home() {
 
   {/* 지도 영역 */}
           <div className="flex-1 min-h-0 relative">
-            <div className="absolute top-4 left-4 z-[1000] flex gap-2">
-              <button
-                onClick={() => setFilter("all")}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
-                  filter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                전체
-              </button>
-              {(["CAT", "DOG", "OTHER"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setFilter(type)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
-                    filter === type ? `${animalConfig[type].color} text-white` : "bg-white text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  {animalConfig[type].emoji} {animalConfig[type].label}
-                </button>
-              ))}
-            </div>
+            <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
+  {/* 동물 종류 필터 */}
+  <div className="flex gap-2">
+    <button
+      onClick={() => setFilter("all")}
+      className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
+        filter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
+      }`}
+    >
+      전체
+    </button>
+    {(["CAT", "DOG", "OTHER"] as const).map((type) => (
+      <button
+        key={type}
+        onClick={() => setFilter(type)}
+        className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
+          filter === type ? `${animalConfig[type].color} text-white` : "bg-white text-gray-700 hover:bg-gray-100"
+        }`}
+      >
+        {animalConfig[type].emoji} {animalConfig[type].label}
+      </button>
+    ))}
+  </div>
+
+  {/* 상태 필터 */}
+    <div className="flex gap-2">
+      <button
+        onClick={() => setStatusFilter("all")}
+        className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
+          statusFilter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
+        }`}
+      >
+        전체 상태
+      </button>
+      {(["SPOTTED", "PROTECTING", "FOUND"] as const).map((status) => (
+        <button
+          key={status}
+          onClick={() => setStatusFilter(status)}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
+            statusFilter === status
+              ? `${statusConfig[status].bgColor} text-white`
+              : "bg-white text-gray-700 hover:bg-gray-100"
+          }`}
+        >
+          {statusConfig[status].label}
+        </button>
+      ))}
+    </div>
+  </div>
 
             {loading ? (
               <div className="flex flex-col items-center justify-center w-full h-full text-gray-600">

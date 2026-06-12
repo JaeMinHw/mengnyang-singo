@@ -1,5 +1,6 @@
 import type { Sighting } from "@/types/sighting";
-import { animalConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
+import { animalConfig, statusConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
+
 
 interface SightingListProps {
   sightings: Sighting[];
@@ -35,6 +36,11 @@ export default function SightingList({
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-900">
                   {animalConfig[sighting.animal_type]?.label || "동물"} 발견
+                </span>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  statusConfig[sighting.status]?.color || "bg-gray-100 text-gray-700"
+                }`}>
+                  {statusConfig[sighting.status]?.label || sighting.status}
                 </span>
               </div>
 
