@@ -42,3 +42,57 @@ export const parseAddress = (address: string | null) => {
     detail: parts[1] || null,
   };
 };
+
+
+export const getKakaoMapLink = (
+  latitude: number,
+  longitude: number,
+  name?: string
+) => {
+  const label = encodeURIComponent(name || "목적지");
+  return `https://map.kakao.com/link/to/${label},${latitude},${longitude}`;
+};
+
+
+
+
+export const getKakaoMapSearchLink = (query: string) => {
+  return `https://map.kakao.com/?q=${encodeURIComponent(query)}`;
+};
+
+export const openKakaoMapSearch = (query: string) => {
+  if (typeof window === "undefined") return;
+
+  const encodedQuery = encodeURIComponent(query);
+  const webUrl = getKakaoMapSearchLink(query);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // PC는 웹 검색 새 탭
+  if (!isMobile) {
+    window.open(webUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  // 모바일은 카카오맵 앱 검색 시도
+  const appUrl = `kakaomap://search?q=${encodedQuery}`;
+  let didHide = false;
+
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      didHide = true;
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  window.location.href = appUrl;
+
+  // 앱이 안 열리면 웹 검색으로 fallback
+  window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+    if (!didHide) {
+      window.location.href = webUrl;
+    }
+  }, 800);
+};

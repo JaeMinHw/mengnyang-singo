@@ -3,7 +3,15 @@
 import { MapMarker, MarkerClusterer, CustomOverlayMap, useMap } from "react-kakao-maps-sdk";
 import { useEffect, useState, useRef, useCallback } from "react";
 import type { Sighting, ClusterInfo } from "@/types/sighting";
-import { animalConfig, statusConfig, formatDateShort, parseAddress } from "@/lib/sightingUtils";
+import {
+  animalConfig,
+  statusConfig,
+  formatDateShort,
+  parseAddress,
+  getKakaoMapSearchLink,
+  openKakaoMapSearch,
+} from "@/lib/sightingUtils";
+
 
 
 interface MapWithLogicProps {
@@ -81,6 +89,31 @@ export default function MapWithLogic({
     updateVisibleSightings();
   }, [sightings, updateVisibleSightings]);
 
+
+  useEffect(() => {
+    if (selectedMarker && !sightings.some((s) => s.id === selectedMarker.id)) {
+      setSelectedMarker(null);
+    }
+
+    if (selectedCluster) {
+      const remainingMarkers = selectedCluster.markers.filter((marker) =>
+        sightings.some((s) => s.id === marker.id)
+      );
+
+      if (remainingMarkers.length === 0) {
+        setSelectedCluster(null);
+      } else if (remainingMarkers.length !== selectedCluster.markers.length) {
+        setSelectedCluster({
+          ...selectedCluster,
+          markers: remainingMarkers,
+        });
+      }
+    }
+
+    if (lastSelectedId && !sightings.some((s) => s.id === lastSelectedId)) {
+      setLastSelectedId(null);
+    }
+  }, [sightings, selectedMarker, selectedCluster, lastSelectedId]);
   const handleMapClick = () => {
     setSelectedMarker(null);
     setSelectedCluster(null);
@@ -246,10 +279,25 @@ export default function MapWithLogic({
                 (() => {
                   const { main, detail } = parseAddress(selectedMarker.address);
                   return (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {main && <p>📍 {main}</p>}
-                      {detail && <p className="text-gray-400">└ {detail}</p>}
-                    </div>
+                    <a
+                      href={getKakaoMapSearchLink([main, detail].filter(Boolean).join(" "))}
+                      className="block mt-1 group"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openKakaoMapSearch([main, detail].filter(Boolean).join(" "));
+                      }}
+                    >
+                      {main && (
+                        <p className="text-sm font-semibold text-blue-700 underline underline-offset-4 decoration-blue-300 group-hover:text-blue-800 group-hover:decoration-blue-500 transition-colors">
+                          📍 {main}
+                        </p>
+                      )}
+                      {detail && <p className="text-xs text-gray-400 mt-1">└ {detail}</p>}
+                      <p className="text-[11px] text-blue-500 mt-1 font-medium">
+                        탭하면 카카오맵에서 위치 검색
+                      </p>
+                    </a>
                   );
                 })()}
 

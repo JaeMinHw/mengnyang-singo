@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import type { Sighting } from "@/types/sighting";
-import { animalConfig, statusConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
+import {
+  animalConfig,
+  statusConfig,
+  formatDate,
+  parseAddress,
+  getKakaoMapSearchLink,
+  openKakaoMapSearch,
+} from "@/lib/sightingUtils";
+
+
 
 
 interface SightingDetailModalProps {
@@ -95,10 +104,29 @@ export default function SightingDetailModal({
 
           {/* 주소 */}
           {(main || detail) && (
-            <div className="bg-gray-50 rounded-xl p-3">
-              {main && <p className="text-sm text-gray-700">📍 {main}</p>}
-              {detail && <p className="text-xs text-gray-500 mt-1">└ {detail}</p>}
-            </div>
+            <a
+              href={getKakaoMapSearchLink(
+                [main, detail].filter(Boolean).join(" ")
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition-colors cursor-pointer group"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {main && (
+                <p className="text-base font-semibold text-blue-700 underline underline-offset-4 decoration-blue-300 group-hover:text-blue-800 group-hover:decoration-blue-500 transition-colors">
+                  📍 {main}
+                </p>
+              )}
+              {detail && (
+                <p className="text-xs text-gray-500 mt-2">
+                  └ {detail}
+                </p>
+              )}
+              <p className="text-[11px] text-blue-500 mt-2 font-medium">
+                탭하면 카카오맵에서 이 위치를 검색합니다
+              </p>
+            </a>
           )}
 
           {/* 설명 */}
