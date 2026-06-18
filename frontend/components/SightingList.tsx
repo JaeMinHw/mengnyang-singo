@@ -1,18 +1,42 @@
 import type { Sighting } from "@/types/sighting";
-import { animalConfig, statusConfig, formatDate, parseAddress } from "@/lib/sightingUtils";
-
+import {
+  animalConfig,
+  statusConfig,
+  formatDate,
+  parseAddress,
+  getHighlightParts,
+} from "@/lib/sightingUtils";
 
 interface SightingListProps {
   sightings: Sighting[];
   selectedId: number | null;
   onSelect: (sighting: Sighting) => void;
+  searchQuery: string;
 }
 
 export default function SightingList({
   sightings,
   selectedId,
   onSelect,
+  searchQuery,
 }: SightingListProps) {
+  const renderHighlightedText = (text: string, keyPrefix: string) => {
+    const parts = getHighlightParts(text, searchQuery);
+
+    return parts.map((part, index) =>
+      part.matched ? (
+        <mark
+          key={`${keyPrefix}-${index}`}
+          className="bg-yellow-200 text-gray-900 rounded px-0.5"
+        >
+          {part.text}
+        </mark>
+      ) : (
+        <span key={`${keyPrefix}-${index}`}>{part.text}</span>
+      )
+    );
+  };
+
   return (
     <ul className="divide-y divide-gray-100">
       {sightings.map((sighting) => (
@@ -37,9 +61,11 @@ export default function SightingList({
                 <span className="font-medium text-gray-900">
                   {animalConfig[sighting.animal_type]?.label || "동물"} 발견
                 </span>
-                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                  statusConfig[sighting.status]?.color || "bg-gray-100 text-gray-700"
-                }`}>
+                <span
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                    statusConfig[sighting.status]?.color || "bg-gray-100 text-gray-700"
+                  }`}
+                >
                   {statusConfig[sighting.status]?.label || sighting.status}
                 </span>
               </div>
@@ -57,14 +83,27 @@ export default function SightingList({
                   const { main, detail } = parseAddress(sighting.address);
                   return (
                     <>
-                      {main && <p className="text-sm text-gray-600 truncate mt-2">📍 {main}</p>}
-                      {detail && <p className="text-xs text-gray-400 truncate">└ {detail}</p>}
+                      {main && (
+                        <p className="text-sm text-gray-600 truncate mt-2">
+                          📍 {renderHighlightedText(main, `${sighting.id}-address-main`)}
+                        </p>
+                      )}
+                      {detail && (
+                        <p className="text-xs text-gray-400 truncate">
+                          └ {renderHighlightedText(detail, `${sighting.id}-address-detail`)}
+                        </p>
+                      )}
                     </>
                   );
                 })()}
 
               {sighting.description && (
-                <p className="text-sm text-gray-500 truncate mt-1">{sighting.description}</p>
+                <p className="text-sm text-gray-500 truncate mt-1">
+                  {renderHighlightedText(
+                    sighting.description,
+                    `${sighting.id}-description`
+                  )}
+                </p>
               )}
 
               <p className="text-xs text-gray-400 mt-1">

@@ -109,7 +109,12 @@ export default function SightingListPanel({
               </p>
             </div>
           ) : (
-            <SightingList sightings={sightings} selectedId={selectedId} onSelect={onSelect} />
+            <SightingList
+              sightings={sightings}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              searchQuery={searchQuery}
+            />
           )}
         </div>
       </div>
@@ -215,7 +220,12 @@ export default function SightingListPanel({
               </p>
             </div>
           ) : (
-            <SightingList sightings={sightings} selectedId={selectedId} onSelect={onSelect} />
+            <SightingList
+              sightings={sightings}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              searchQuery={searchQuery}
+            />
           )}
         </div>
       </div>

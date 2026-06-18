@@ -103,31 +103,59 @@ export const openKakaoMapSearch = (query: string) => {
 // =============================================
 
 const synonymGroups: string[][] = [
-  // 색상
-  ["검정", "검정색", "검은색", "까만", "블랙", "black", "검은"],
-  ["흰색", "하얀", "하얀색", "화이트", "white"],
-  ["갈색", "브라운", "brown"],
-  ["회색", "그레이", "grey", "gray"],
-  ["노란색", "노랑", "황색", "옐로우", "yellow"],
-  ["주황색", "주황", "오렌지", "orange"],
-  ["베이지", "베이지색", "크림색"],
-  ["고등어", "고등어색"],
+  // 🎨 색상 (기본 색상 및 펫 특화 색상 명칭 추가)
+  ["검정", "검정색", "검은색", "까만", "까만색", "까망", "깜장", "블랙", "black", "올블랙", "다크", "흑색"],
+  ["흰색", "하얀", "하얀색", "화이트", "white", "백색", "올화이트", "백구"],
+  ["갈색", "브라운", "brown", "밤색", "초코", "초코색", "초콜릿", "탄"],
+  ["회색", "그레이", "grey", "gray", "쥐색", "실버", "은색", "블루"], // '블루'는 러시안블루, 프렌치불독 등에서 회색을 뜻함
+  ["노란색", "노랑", "황색", "옐로우", "yellow", "누런", "누렁", "누렁이", "황구", "골드", "금색"],
+  ["주황색", "주황", "오렌지", "orange", "레드", "붉은색", "적색", "진저"],
+  ["베이지", "베이지색", "크림", "크림색", "아이보리", "연갈색", "폰"], // '폰(fawn)'은 옅은 황갈색을 뜻함
 
-  // 무늬
-  ["삼색", "삼색이", "세가지색"],
-  ["얼룩", "점박이", "반점"],
-  ["줄무늬", "호랑이무늬", "타이거"],
-  ["턱시도", "턱시도무늬"],
+  // 🐾 무늬 (강아지/고양이 주요 패턴 및 애칭 추가)
+  ["고등어", "고등어색", "고등어태비"],
+  ["치즈", "치즈색", "치즈태비", "노란줄무늬", "올치즈"], // 고양이 특화
+  ["삼색", "삼색이", "세가지색", "칼리코", "calico"],
+  ["카오스", "토티쉘", "거북이등껍질"], // 삼색이와 비슷하지만 흰색이 없는 패턴
+  ["얼룩", "점박이", "반점", "바둑이", "스팟", "spotted", "파티컬러", "파이발드"],
+  ["줄무늬", "호랑이무늬", "타이거", "태비", "tabby", "브린들"], // '브린들'은 강아지의 호피무늬를 뜻함
+  ["턱시도", "턱시도무늬", "젖소", "젖소무늬", "바이컬러", "투톤"],
+  ["멀", "merle", "대리석무늬"], // 보더콜리, 오스트레일리안 셰퍼드 등에서 나타나는 대리석 무늬
 
-  // 크기
-  ["소형", "작은", "소형견"],
-  ["중형", "중간", "중형견"],
-  ["대형", "큰", "대형견"],
+  // 📏 크기 (초소형, 초대형 추가 및 영문 확장)
+  ["초소형", "초소형견", "토이", "티컵"],
+  ["소형", "소형견", "작은", "스몰", "small", "소형묘"],
+  ["중형", "중간", "중형견", "미디엄", "medium", "중형묘"],
+  ["대형", "큰", "대형견", "라지", "large", "대형묘"],
+  ["초대형", "초대형견", "자이언트"],
 
-  // 기타 특징
-  ["장모", "장털", "긴털"],
-  ["단모", "단털", "짧은털"],
+  // ✂️ 털 길이 및 형태 (곱슬, 무모 등 추가)
+  ["장모", "장털", "긴털", "장모종", "롱코트", "long"],
+  ["중모", "중장모", "중간털"],
+  ["단모", "단털", "짧은털", "단모종", "숏코트", "short"],
+  ["곱슬", "곱슬털", "푸들털", "웨이비", "파마"],
+  ["강모", "뻣뻣한털", "와이어", "거친털"],
+  ["무모", "털없는", "헤어리스", "스핑크스"],
+
+  // 🎂 연령대 (검색 및 필터링용)
+  ["새끼", "아기", "퍼피", "자견", "강아지", "아깽이", "키튼", "자묘", "새끼고양이", "1살미만"],
+  ["성체", "성견", "성묘", "어른", "성묘", "다큰"],
+  ["노령", "노견", "노묘", "시니어", "할아버지", "할머니", "나이많은"],
+
+  // 👂 신체 특징 (유기동물 식별에 매우 자주 쓰이는 키워드)
+  ["단미", "꼬리없는", "짧은꼬리", "몽당꼬리", "밥테일", "코기꼬리"],
+  ["접힌귀", "폴드", "처진귀", "덮인귀"],
+  ["선귀", "쫑긋한귀", "선귀", "짝귀"],
+  ["오드아이", "파란눈", "양쪽눈색다름", "홍채이색증"]
 ];
+
+
+const representativeToGroup = new Map<string, string[]>();
+
+synonymGroups.forEach((group) => {
+  representativeToGroup.set(group[0].toLowerCase(), group);
+});
+
 
 // 동의어 → 대표어 맵 생성
 const synonymMap = new Map<string, string>();
@@ -168,4 +196,61 @@ export const matchesSearch = (
 
   // 모든 검색어가 포함되어야 매칭 (AND 조건)
   return queryWords.every((word) => targetText.includes(word));
+};
+
+
+const escapeRegExp = (value: string) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const getHighlightTerms = (searchQuery: string): string[] => {
+  if (!searchQuery.trim()) return [];
+
+  const rawWords = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = new Set<string>();
+
+  rawWords.forEach((word) => {
+    const normalizedWord = normalizeSearchText(word).trim().toLowerCase();
+    const representative =
+      synonymMap.get(word) ??
+      synonymMap.get(normalizedWord) ??
+      normalizedWord;
+
+    const group = representativeToGroup.get(representative);
+
+    if (group) {
+      group.forEach((term) => terms.add(term));
+    } else {
+      terms.add(word);
+      if (normalizedWord) {
+        terms.add(normalizedWord);
+      }
+    }
+  });
+
+  return Array.from(terms).sort((a, b) => b.length - a.length);
+};
+
+export const getHighlightParts = (
+  text: string,
+  searchQuery: string
+): { text: string; matched: boolean }[] => {
+  if (!text) return [];
+
+  const terms = getHighlightTerms(searchQuery);
+
+  if (terms.length === 0) {
+    return [{ text, matched: false }];
+  }
+
+  const regex = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
+  const lowerTerms = new Set(terms.map((term) => term.toLowerCase()));
+
+  return text
+    .split(regex)
+    .filter(Boolean)
+    .map((part) => ({
+      text: part,
+      matched: lowerTerms.has(part.toLowerCase()),
+    }));
 };
