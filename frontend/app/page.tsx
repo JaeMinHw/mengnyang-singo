@@ -4,19 +4,14 @@ import { Map as KakaoMap } from "react-kakao-maps-sdk";
 import Script from "next/script";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
-
 import api from "@/lib/api";
 import Header from "@/components/Header";
-import type { Sighting, ClusterInfo, CurrentUser } from "@/types/sighting";
-import { animalConfig, statusConfig, matchesSearch } from "@/lib/sightingUtils";
-
-
+import type { Sighting, CurrentUser } from "@/types/sighting";
+import { animalConfig, matchesSearch } from "@/lib/sightingUtils";
 
 import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
 import MapWithLogic from "@/components/MapWithLogic";
-
-
 
 // =============================================
 // 메인 페이지
@@ -32,13 +27,10 @@ export default function Home() {
   const [filter, setFilter] = useState<string>("all");
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
   const [focusedSighting, setFocusedSighting] = useState<Sighting | null>(null);
-  const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-
+  const [showFound, setShowFound] = useState(false);
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
 
@@ -58,26 +50,53 @@ export default function Home() {
   const handleScriptLoad = () => {
     window.kakao.maps.load(() => setLoading(false));
   };
+
   // 이미 SDK가 로드되어 있을 경우를 위한 처리
   useEffect(() => {
-      if (window.kakao && window.kakao.maps) {
-          setLoading(false);
-      }
+    if (window.kakao && window.kakao.maps) {
+      setLoading(false);
+    }
   }, []);
+  
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
 
+    if (status === "FOUND") {
+      setShowFound(true);
+      return;
+    }
+
+    if (status === "SPOTTED" || status === "PROTECTING") {
+      setShowFound(false);
+    }
+  };
+
+  const handleToggleShowFound = () => {
+    setShowFound((prev) => {
+      const next = !prev;
+
+      if (!next && statusFilter === "FOUND") {
+        setStatusFilter("all");
+      }
+
+      return next;
+    });
+  };
   const filteredSightings = useMemo(() => {
     return sightings.filter((s) => {
       const matchAnimal = filter === "all" || s.animal_type === filter;
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
       const matchSearch = matchesSearch(s, searchQuery);
-      return matchAnimal && matchStatus && matchSearch;
+      const matchFoundVisibility =
+        statusFilter === "FOUND" || showFound || s.status !== "FOUND";
+
+      return matchAnimal && matchStatus && matchSearch && matchFoundVisibility;
     });
-  }, [sightings, filter, statusFilter, searchQuery]);
+  }, [sightings, filter, statusFilter, searchQuery, showFound]);
 
   // MapWithLogic에서 bounds 변경 시 호출됨
   const handleBoundsChange = useCallback((visible: Sighting[]) => {
     setVisibleSightings((prev) => {
-      // ID 목록이 같으면 업데이트 안 함
       if (
         prev.length === visible.length &&
         prev.every((s, i) => s.id === visible[i].id)
@@ -93,6 +112,7 @@ export default function Home() {
     setFocusedSighting({ ...sighting });
     setDetailSighting(sighting);
   };
+
   const handleMarkerSelect = (sighting: Sighting) => {
     setSelectedSightingId(sighting.id);
   };
@@ -105,14 +125,11 @@ export default function Home() {
 
       const updated = response.data;
 
-      // sightings 배열 갱신
       setSightings((prev) =>
         prev.map((s) => (s.id === sightingId ? updated : s))
       );
 
-      // 상세 모달도 즉시 갱신
       setDetailSighting(updated);
-
     } catch (err) {
       console.error("상태 변경 실패:", err);
       alert("상태 변경에 실패했습니다. 다시 시도해주세요.");
@@ -122,20 +139,20 @@ export default function Home() {
   return (
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
-            {/* 이미지 풀스크린 모달 */}
 
-        {detailSighting && (
-          <SightingDetailModal
-            sighting={detailSighting}
-            currentUserId={currentUser?.id ?? null}
-            onClose={() => setDetailSighting(null)}
-            onImageClick={(url) => {
-              setDetailSighting(null);
-              setFullImageUrl(url);
-            }}
-            onStatusChange={handleStatusChange}
-          />
-        )}
+      {detailSighting && (
+        <SightingDetailModal
+          sighting={detailSighting}
+          currentUserId={currentUser?.id ?? null}
+          onClose={() => setDetailSighting(null)}
+          onImageClick={(url) => {
+            setDetailSighting(null);
+            setFullImageUrl(url);
+          }}
+          onStatusChange={handleStatusChange}
+        />
+      )}
+
       {fullImageUrl && (
         <div
           className="fixed inset-0 z-[2000] bg-black/80 flex items-center justify-center p-4"
@@ -156,62 +173,36 @@ export default function Home() {
           />
         </div>
       )}
+
       <main className="w-full h-[100dvh] overflow-hidden bg-gray-50 flex flex-col">
         <Header currentUser={currentUser} authLoading={authLoading} />
 
-            <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
-
-  {/* 지도 영역 */}
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
           <div className="flex-1 min-h-0 relative">
             <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
-  {/* 동물 종류 필터 */}
-  <div className="flex gap-2">
-    <button
-      onClick={() => setFilter("all")}
-      className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
-        filter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
-      }`}
-    >
-      전체
-    </button>
-    {(["CAT", "DOG", "OTHER"] as const).map((type) => (
-      <button
-        key={type}
-        onClick={() => setFilter(type)}
-        className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
-          filter === type ? `${animalConfig[type].color} text-white` : "bg-white text-gray-700 hover:bg-gray-100"
-        }`}
-      >
-        {animalConfig[type].emoji} {animalConfig[type].label}
-      </button>
-    ))}
-  </div>
-
-  {/* 상태 필터 */}
-    <div className="flex gap-2">
-      <button
-        onClick={() => setStatusFilter("all")}
-        className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
-          statusFilter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
-        }`}
-      >
-        전체 상태
-      </button>
-      {(["SPOTTED", "PROTECTING", "FOUND"] as const).map((status) => (
-        <button
-          key={status}
-          onClick={() => setStatusFilter(status)}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
-            statusFilter === status
-              ? `${statusConfig[status].bgColor} text-white`
-              : "bg-white text-gray-700 hover:bg-gray-100"
-          }`}
-        >
-          {statusConfig[status].label}
-        </button>
-      ))}
-    </div>
-  </div>
+              {/* 동물 종류 필터 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setFilter("all")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
+                    filter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  전체
+                </button>
+                {(["CAT", "DOG", "OTHER"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilter(type)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
+                      filter === type ? `${animalConfig[type].color} text-white` : "bg-white text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {animalConfig[type].emoji} {animalConfig[type].label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {loading ? (
               <div className="flex flex-col items-center justify-center w-full h-full text-gray-600">
@@ -232,7 +223,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* 목록 패널 - 모바일: 바텀시트 / PC: 오른쪽 사이드 */}
           <SightingListPanel
             sightings={visibleSightings}
             selectedId={selectedSightingId}
@@ -241,6 +231,10 @@ export default function Home() {
             onToggle={() => setIsListExpanded(!isListExpanded)}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={handleStatusFilterChange}
+            showFound={showFound}
+            onToggleShowFound={handleToggleShowFound}
           />
         </div>
       </main>
