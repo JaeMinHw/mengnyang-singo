@@ -10,6 +10,7 @@ class SightingCreate(BaseModel):
     latitude: float
     longitude: float
     address: Optional[str] = None
+    post_type: Literal["SIGHTING", "LOST"] = "SIGHTING"
 
 
 class SightingResponse(BaseModel):
@@ -23,6 +24,7 @@ class SightingResponse(BaseModel):
     longitude: float
     address: Optional[str]
     status: str
+    post_type: str
     created_at: datetime
     updated_at: datetime
 
@@ -34,5 +36,6 @@ class HealthResponse(BaseModel):
     status: str
     version: str
 
+
 class SightingStatusUpdate(BaseModel):
-    status: Literal["SPOTTED", "PROTECTING", "FOUND"]
+    status: Literal["SPOTTED", "LOST", "PROTECTING", "FOUND"]

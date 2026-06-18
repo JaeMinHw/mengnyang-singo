@@ -7,15 +7,12 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import Header from "@/components/Header";
 import type { Sighting, CurrentUser } from "@/types/sighting";
-import { animalConfig, matchesSearch } from "@/lib/sightingUtils";
+import { animalConfig, postTypeConfig, matchesSearch } from "@/lib/sightingUtils";
 
 import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
 import MapWithLogic from "@/components/MapWithLogic";
 
-// =============================================
-// 메인 페이지
-// =============================================
 export default function Home() {
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
@@ -25,6 +22,7 @@ export default function Home() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
   const [visibleSightings, setVisibleSightings] = useState<Sighting[]>([]);
   const [filter, setFilter] = useState<string>("all");
+  const [postTypeFilter, setPostTypeFilter] = useState<string>("all");
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
   const [focusedSighting, setFocusedSighting] = useState<Sighting | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
@@ -51,13 +49,12 @@ export default function Home() {
     window.kakao.maps.load(() => setLoading(false));
   };
 
-  // 이미 SDK가 로드되어 있을 경우를 위한 처리
   useEffect(() => {
     if (window.kakao && window.kakao.maps) {
       setLoading(false);
     }
   }, []);
-  
+
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);
 
@@ -66,7 +63,7 @@ export default function Home() {
       return;
     }
 
-    if (status === "SPOTTED" || status === "PROTECTING") {
+    if (status === "SPOTTED" || status === "PROTECTING" || status === "LOST") {
       setShowFound(false);
     }
   };
@@ -82,19 +79,20 @@ export default function Home() {
       return next;
     });
   };
+
   const filteredSightings = useMemo(() => {
     return sightings.filter((s) => {
       const matchAnimal = filter === "all" || s.animal_type === filter;
+      const matchPostType = postTypeFilter === "all" || s.post_type === postTypeFilter;
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
       const matchSearch = matchesSearch(s, searchQuery);
       const matchFoundVisibility =
         statusFilter === "FOUND" || showFound || s.status !== "FOUND";
 
-      return matchAnimal && matchStatus && matchSearch && matchFoundVisibility;
+      return matchAnimal && matchPostType && matchStatus && matchSearch && matchFoundVisibility;
     });
-  }, [sightings, filter, statusFilter, searchQuery, showFound]);
+  }, [sightings, filter, postTypeFilter, statusFilter, searchQuery, showFound]);
 
-  // MapWithLogic에서 bounds 변경 시 호출됨
   const handleBoundsChange = useCallback((visible: Sighting[]) => {
     setVisibleSightings((prev) => {
       if (
@@ -180,6 +178,7 @@ export default function Home() {
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
           <div className="flex-1 min-h-0 relative">
             <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
+
               {/* 동물 종류 필터 */}
               <div className="flex gap-2">
                 <button
@@ -195,13 +194,43 @@ export default function Home() {
                     key={type}
                     onClick={() => setFilter(type)}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
-                      filter === type ? `${animalConfig[type].color} text-white` : "bg-white text-gray-700 hover:bg-gray-100"
+                      filter === type
+                        ? `${animalConfig[type].color} text-white`
+                        : "bg-white text-gray-700 hover:bg-gray-100"
                     }`}
                   >
                     {animalConfig[type].emoji} {animalConfig[type].label}
                   </button>
                 ))}
               </div>
+
+              {/* 글 종류 필터 */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPostTypeFilter("all")}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
+                    postTypeFilter === "all"
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  전체 글
+                </button>
+                {(["SIGHTING", "LOST"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setPostTypeFilter(type)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
+                      postTypeFilter === type
+                        ? `${postTypeConfig[type].bgColor} text-white`
+                        : "bg-white text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {postTypeConfig[type].emoji} {postTypeConfig[type].label}
+                  </button>
+                ))}
+              </div>
+
             </div>
 
             {loading ? (

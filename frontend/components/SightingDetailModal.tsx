@@ -5,6 +5,7 @@ import type { Sighting } from "@/types/sighting";
 import {
   animalConfig,
   statusConfig,
+  postTypeConfig,
   formatDate,
   parseAddress,
   getKakaoMapSearchLink,
@@ -24,7 +25,7 @@ interface SightingDetailModalProps {
 
 
 
-const ALL_STATUSES = ["SPOTTED", "PROTECTING", "FOUND"];
+const ALL_STATUSES = ["SPOTTED", "LOST", "PROTECTING", "FOUND"];
 
 export default function SightingDetailModal({
   sighting,
@@ -80,16 +81,15 @@ export default function SightingDetailModal({
           {/* 상단: 동물 종류 + 상태 뱃지 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-lg ${
-                  animalConfig[sighting.animal_type]?.color || "bg-gray-500"
-                }`}
-              >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-lg ${
+                animalConfig[sighting.animal_type]?.color || "bg-gray-500"
+              }`}>
                 {animalConfig[sighting.animal_type]?.emoji || "🐾"}
               </div>
               <div>
                 <p className="font-semibold text-gray-900">
-                  {animalConfig[sighting.animal_type]?.label || "동물"} 발견
+                  {animalConfig[sighting.animal_type]?.label || "동물"}
+                  {sighting.post_type === "LOST" ? " 실종" : " 발견"}
                 </p>
                 <p className="text-xs text-gray-400">
                   {formatDate(sighting.created_at)}
@@ -97,9 +97,19 @@ export default function SightingDetailModal({
               </div>
             </div>
 
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusInfo.color}`}>
-              {statusInfo.label}
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              {(() => {
+                const typeConf = postTypeConfig[sighting.post_type] || postTypeConfig["SIGHTING"];
+                return (
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${typeConf.color}`}>
+                    {typeConf.emoji} {typeConf.label}
+                  </span>
+                );
+              })()}
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusInfo.color}`}>
+                {statusInfo.label}
+              </span>
+            </div>
           </div>
 
           {/* 주소 */}

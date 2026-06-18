@@ -16,6 +16,7 @@ class Sighting(Base):
     longitude = Column(Float, nullable=False)
     address = Column(String(200))
     status = Column(String(20), default="SPOTTED")
+    post_type = Column(String(20), default="SIGHTING", nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

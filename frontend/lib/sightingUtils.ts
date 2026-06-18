@@ -12,9 +12,30 @@ export const statusConfig: Record<
   { label: string; color: string; bgColor: string }
 > = {
   SPOTTED: { label: "목격", color: "bg-yellow-100 text-yellow-700", bgColor: "bg-yellow-500" },
+  LOST: { label: "실종", color: "bg-red-100 text-red-700", bgColor: "bg-red-500" },
   PROTECTING: { label: "보호 중", color: "bg-blue-100 text-blue-700", bgColor: "bg-blue-500" },
   FOUND: { label: "찾음", color: "bg-green-100 text-green-700", bgColor: "bg-green-500" },
 };
+
+
+export const postTypeConfig: Record<
+  string,
+  { label: string; emoji: string; color: string; bgColor: string }
+> = {
+  SIGHTING: {
+    label: "목격",
+    emoji: "👀",
+    color: "bg-amber-100 text-amber-700",
+    bgColor: "bg-amber-500",
+  },
+  LOST: {
+    label: "실종",
+    emoji: "🔍",
+    color: "bg-rose-100 text-rose-700",
+    bgColor: "bg-rose-500",
+  },
+};
+
 
 export const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString("ko-KR", {
@@ -146,7 +167,11 @@ const synonymGroups: string[][] = [
   ["단미", "꼬리없는", "짧은꼬리", "몽당꼬리", "밥테일", "코기꼬리"],
   ["접힌귀", "폴드", "처진귀", "덮인귀"],
   ["선귀", "쫑긋한귀", "선귀", "짝귀"],
-  ["오드아이", "파란눈", "양쪽눈색다름", "홍채이색증"]
+  ["오드아이", "파란눈", "양쪽눈색다름", "홍채이색증"],
+
+  // 복장 특징 (유기동물 신고 시 종종 언급되는 키워드)
+  ["장화", "신발", "부츠", "양말"],
+  ["흉터","상처", "자국", "수술"],
 ];
 
 

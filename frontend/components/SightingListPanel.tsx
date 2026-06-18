@@ -69,7 +69,7 @@ export default function SightingListPanel({
                 전체 상태
               </button>
 
-              {(["SPOTTED", "PROTECTING", "FOUND"] as const).map((status) => (
+              {(["SPOTTED", "LOST", "PROTECTING", "FOUND"] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => onStatusFilterChange(status)}
@@ -180,7 +180,7 @@ export default function SightingListPanel({
                 전체 상태
               </button>
 
-              {(["SPOTTED", "PROTECTING", "FOUND"] as const).map((status) => (
+              {(["SPOTTED", "LOST", "PROTECTING", "FOUND"] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => onStatusFilterChange(status)}

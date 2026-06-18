@@ -9,7 +9,9 @@ export interface Sighting {
   longitude: number;
   address: string | null;
   status: string;
+  post_type: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface ClusterInfo {

@@ -6,6 +6,7 @@ import type { Sighting, ClusterInfo } from "@/types/sighting";
 import {
   animalConfig,
   statusConfig,
+  postTypeConfig,
   formatDateShort,
   parseAddress,
   getKakaoMapSearchLink,
@@ -190,17 +191,60 @@ export default function MapWithLogic({
     setSelectedMarker(sighting);
     setLastSelectedId(sighting.id);
   };
+    const getMarkerImageSrc = (sighting: Sighting) => {
+    const isLostPost = sighting.post_type === "LOST";
 
+    if (sighting.animal_type === "DOG") {
+      return isLostPost ? "/dog-marker-lost.png" : "/dog-marker.png";
+    }
+
+    return isLostPost ? "/cat-marker-lost.png" : "/cat-marker.png";
+  };
+
+  const defaultClusterStyles = [
+    {
+      width: "40px",
+      height: "40px",
+      background: "rgba(59, 130, 246, 0.85)",
+      borderRadius: "20px",
+      color: "#fff",
+      fontSize: "14px",
+      fontWeight: "700",
+      textAlign: "center" as const,
+      lineHeight: "40px",
+      boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
+    },
+  ];
+
+  const lostClusterStyles = [
+    {
+      width: "40px",
+      height: "40px",
+      background: "rgba(244, 63, 94, 0.9)",
+      borderRadius: "20px",
+      color: "#fff",
+      fontSize: "14px",
+      fontWeight: "700",
+      textAlign: "center" as const,
+      lineHeight: "40px",
+      boxShadow: "0 4px 10px rgba(0,0,0,0.18)",
+    },
+  ];
+
+  const sightingPosts = sightings.filter((s) => s.post_type !== "LOST");
+  const lostPosts = sightings.filter((s) => s.post_type === "LOST");
   return (
     <>
+    {/* 목격 글 클러스터 */}
       <MarkerClusterer
         averageCenter={true}
         minLevel={6}
         gridSize={60}
         disableClickZoom={true}
         onClusterclick={handleClusterClick}
+        styles={defaultClusterStyles}
       >
-        {sightings.map((sighting) => (
+        {sightingPosts.map((sighting) => (
           <MapMarker
             key={sighting.id}
             position={{ lat: sighting.latitude, lng: sighting.longitude }}
@@ -213,7 +257,36 @@ export default function MapWithLogic({
               onMarkerSelect(sighting);
             }}
             image={{
-              src: sighting.animal_type === "DOG" ? "/dog-marker.png" : "/cat-marker.png",
+              src: getMarkerImageSrc(sighting),
+              size: { width: 36, height: 36 },
+            }}
+          />
+        ))}
+      </MarkerClusterer>
+
+      {/* 실종 글 클러스터 */}
+      <MarkerClusterer
+        averageCenter={true}
+        minLevel={6}
+        gridSize={60}
+        disableClickZoom={true}
+        onClusterclick={handleClusterClick}
+        styles={lostClusterStyles}
+      >
+        {lostPosts.map((sighting) => (
+          <MapMarker
+            key={sighting.id}
+            position={{ lat: sighting.latitude, lng: sighting.longitude }}
+            onCreate={(marker) => markerRef.current.set(marker, sighting.id)}
+            onClick={(marker) => {
+              focusMarkerWithOffset(marker.getPosition(), !!sighting.image_url);
+              setSelectedMarker(sighting);
+              setSelectedCluster(null);
+              setLastSelectedId(sighting.id);
+              onMarkerSelect(sighting);
+            }}
+            image={{
+              src: getMarkerImageSrc(sighting),
               size: { width: 36, height: 36 },
             }}
           />
@@ -234,6 +307,7 @@ export default function MapWithLogic({
             >
               <div className="w-11 h-11 rounded-full border-[3px] border-orange-500 bg-orange-500/20 pointer-events-none" />
             </CustomOverlayMap>
+            
           );
         })()}
 
@@ -247,22 +321,30 @@ export default function MapWithLogic({
             <div className="p-4 bg-white rounded-2xl border border-gray-100 w-[calc(100vw-2rem)] max-w-xs lg:min-w-[200px] z-10">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex flex-wrap gap-1.5">
-                  <span
-                    className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                      selectedMarker.animal_type === "DOG"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-orange-100 text-orange-700"
-                    }`}
-                  >
+                  {/* 글 종류 뱃지 */}
+                  {(() => {
+                    const typeConf = postTypeConfig[selectedMarker.post_type] || postTypeConfig["SIGHTING"];
+                    return (
+                      <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${typeConf.color}`}>
+                        {typeConf.emoji} {typeConf.label}
+                      </span>
+                    );
+                  })()}
+
+                  {/* 동물 종류 뱃지 */}
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                    selectedMarker.animal_type === "DOG"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>
                     {animalConfig[selectedMarker.animal_type]?.emoji}{" "}
                     {animalConfig[selectedMarker.animal_type]?.label || "동물"}
                   </span>
 
-                  <span
-                    className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                      statusConfig[selectedMarker.status]?.color || "bg-gray-100 text-gray-700"
-                    }`}
-                  >
+                  {/* 상태 뱃지 */}
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                    statusConfig[selectedMarker.status]?.color || "bg-gray-100 text-gray-700"
+                  }`}>
                     {statusConfig[selectedMarker.status]?.label || selectedMarker.status}
                   </span>
                 </div>
@@ -326,6 +408,7 @@ export default function MapWithLogic({
               </button>
             </div>
             <div className="w-4 h-4 bg-white transform rotate-45 -translate-y-1 border-b border-r border-gray-100 -z-0"></div>
+            
           </div>
         </CustomOverlayMap>
       )}
@@ -336,7 +419,7 @@ export default function MapWithLogic({
             <div className="bg-white rounded-2xl border border-gray-100 w-[calc(100vw-2rem)] max-w-80 max-h-[45dvh] lg:w-80 lg:max-h-[340px] flex flex-col overflow-hidden z-10">
               <div className="bg-gray-50/90 backdrop-blur-sm p-4 border-b border-gray-100 flex justify-between items-center sticky top-0 z-20">
                 <div className="font-bold text-gray-800 flex items-center gap-2 text-sm">
-                  📋 이 주변 발견 신고
+                  📋 이 주변 신고
                   <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[11px]">
                     {selectedCluster.markers.length}
                   </span>
@@ -358,20 +441,28 @@ export default function MapWithLogic({
                   >
                     <div className="flex justify-between items-center mb-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <div
-                          className={`text-sm font-semibold flex items-center gap-1.5 ${
-                            marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"
-                          }`}
-                        >
+                        {/* 글 종류 뱃지 */}
+                        {(() => {
+                          const typeConf = postTypeConfig[marker.post_type] || postTypeConfig["SIGHTING"];
+                          return (
+                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${typeConf.color}`}>
+                              {typeConf.emoji} {typeConf.label}
+                            </span>
+                          );
+                        })()}
+
+                        {/* 동물 종류 */}
+                        <div className={`text-sm font-semibold flex items-center gap-1.5 ${
+                          marker.animal_type === "DOG" ? "text-blue-700" : "text-orange-700"
+                        }`}>
                           {animalConfig[marker.animal_type]?.emoji}{" "}
                           {animalConfig[marker.animal_type]?.label || "동물"}
                         </div>
 
-                        <span
-                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                            statusConfig[marker.status]?.color || "bg-gray-100 text-gray-700"
-                          }`}
-                        >
+                        {/* 상태 뱃지 */}
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                          statusConfig[marker.status]?.color || "bg-gray-100 text-gray-700"
+                        }`}>
                           {statusConfig[marker.status]?.label || marker.status}
                         </span>
                       </div>
@@ -415,6 +506,7 @@ export default function MapWithLogic({
           </div>
         </CustomOverlayMap>
       )}
+      
     </>
   );
 }

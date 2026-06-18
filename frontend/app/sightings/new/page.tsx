@@ -16,7 +16,7 @@ function getDistanceInMeters(
   lat2: number,
   lng2: number
 ): number {
-  const R = 6371000; // 지구 반지름 (미터)
+  const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
   const dLat = toRad(lat2 - lat1);
@@ -36,6 +36,7 @@ function getDistanceInMeters(
 export default function NewSightingPage() {
   const router = useRouter();
 
+  const [postType, setPostType] = useState<"SIGHTING" | "LOST">("SIGHTING");
   const [animalType, setAnimalType] = useState("CAT");
   const [description, setDescription] = useState("");
   const [latitude, setLatitude] = useState("");
@@ -55,6 +56,7 @@ export default function NewSightingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
 
+  const isSighting = postType === "SIGHTING";
 
   const updatePositionFromMapCenter = (map: kakao.maps.Map) => {
     const center = map.getCenter();
@@ -89,37 +91,28 @@ export default function NewSightingPage() {
           !Number.isNaN(userLat) &&
           !Number.isNaN(userLng);
 
-        // 사용자가 아직 신뢰 가능한 위치를 고르지 못했다면 EXIF 좌표를 바로 적용
         if (!hasValidUserPosition) {
           applyPosition(exifLat, exifLng);
           setErrorMessage("");
           return;
         }
 
-        // 사용자 위치가 있으면 거리 비교
         const distance = getDistanceInMeters(userLat, userLng, exifLat, exifLng);
 
-        // 차이가 작으면 사용자 좌표 유지
         if (distance <= 500) {
           return;
         }
 
-        // 차이가 크면 사용자에게 선택권 제공
         const useExif = window.confirm(
           `사진이 촬영된 위치가 현재 선택한 위치와 약 ${Math.round(distance)}m 떨어져 있습니다.\n\n사진 촬영 위치로 변경하시겠습니까?`
         );
 
         if (useExif) {
           applyPosition(exifLat, exifLng);
-
-        } else {
         }
-      } else {
-
       }
     } catch (err) {
       console.log("📸 EXIF 읽기 실패 (무시 가능):", err);
-
     }
   };
 
@@ -136,7 +129,6 @@ export default function NewSightingPage() {
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`;
 
-  // 좌표 → 주소 변환 (역지오코딩)
   const reverseGeocode = useCallback((lat: number, lng: number) => {
     if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
 
@@ -153,21 +145,20 @@ export default function NewSightingPage() {
   }, []);
 
   const applyPosition = useCallback(
-  (lat: number, lng: number) => {
-    setLatitude(lat.toString());
-    setLongitude(lng.toString());
-    reverseGeocode(lat, lng);
-    setHasChosenLocation(true);
+    (lat: number, lng: number) => {
+      setLatitude(lat.toString());
+      setLongitude(lng.toString());
+      reverseGeocode(lat, lng);
+      setHasChosenLocation(true);
 
-    if (mapRef.current) {
-      const target = new window.kakao.maps.LatLng(lat, lng);
-      mapRef.current.setCenter(target);
-    }
-  },
-  [reverseGeocode]
-);
+      if (mapRef.current) {
+        const target = new window.kakao.maps.LatLng(lat, lng);
+        mapRef.current.setCenter(target);
+      }
+    },
+    [reverseGeocode]
+  );
 
-  // 현재 위치 가져오기
   const handleUseCurrentLocation = () => {
     setErrorMessage("");
 
@@ -212,12 +203,10 @@ export default function NewSightingPage() {
     );
   };
 
-  // 페이지 열릴 때 자동으로 현재 위치 가져오기
   useEffect(() => {
     handleUseCurrentLocation();
   }, []);
 
-  // 카카오 SDK 로드 처리
   const handleScriptLoad = () => {
     window.kakao.maps.load(() => {
       setMapLoading(false);
@@ -229,8 +218,6 @@ export default function NewSightingPage() {
       setMapLoading(false);
     }
   }, []);
-
-  // 지도 클릭 시 좌표 변경 + 주소 변환
 
   const uploadImage = async (): Promise<string | null> => {
     if (!imageFile) return null;
@@ -250,7 +237,7 @@ export default function NewSightingPage() {
 
     return response.data.image_url;
   };
-  // 신고 등록
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -272,16 +259,13 @@ export default function NewSightingPage() {
       return;
     }
 
-    // 주소 + 상세위치 합치기
     const fullAddress = locationDetail
       ? `${address}|||${locationDetail}`
       : address;
 
     try {
-      // 1. 이미지가 있으면 먼저 업로드
       const uploadedImageUrl = await uploadImage();
 
-      // 2. 신고 등록
       await api.post("/sightings", {
         animal_type: animalType,
         description: description || null,
@@ -289,19 +273,20 @@ export default function NewSightingPage() {
         latitude: lat,
         longitude: lng,
         address: fullAddress || null,
+        post_type: postType,
       });
 
-      alert("신고가 등록되었습니다.");
+      alert(isSighting ? "목격 신고가 등록되었습니다." : "실종 등록이 완료되었습니다.");
       router.push("/");
     } catch (error: any) {
-      console.error("신고 등록 실패:", error);
+      console.error("등록 실패:", error);
 
       if (error?.response?.status === 401) {
         setErrorMessage("로그인이 만료되었습니다. 다시 로그인해주세요.");
       } else {
         const detail = error?.response?.data?.detail;
         setErrorMessage(
-          typeof detail === "string" ? detail : "신고 등록에 실패했습니다."
+          typeof detail === "string" ? detail : "등록에 실패했습니다."
         );
       }
     } finally {
@@ -309,7 +294,6 @@ export default function NewSightingPage() {
     }
   };
 
-  // 지도 중심 계산
   const parsedLat = parseFloat(latitude);
   const parsedLng = parseFloat(longitude);
 
@@ -331,9 +315,41 @@ export default function NewSightingPage() {
             ← 돌아가기
           </Link>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">신고 등록</h1>
+          {/* 글 종류 선택 */}
+          <div className="mb-6">
+            <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPostType("SIGHTING")}
+                className={`flex-1 py-3 text-sm font-semibold transition ${
+                  isSighting
+                    ? "bg-amber-500 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                👀 목격 신고
+              </button>
+              <button
+                type="button"
+                onClick={() => setPostType("LOST")}
+                className={`flex-1 py-3 text-sm font-semibold transition ${
+                  !isSighting
+                    ? "bg-rose-500 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                🔍 실종 등록
+              </button>
+            </div>
+          </div>
+
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {isSighting ? "목격 신고" : "실종 등록"}
+          </h1>
           <p className="text-sm text-gray-500 mb-6">
-            발견한 동물의 정보를 입력해주세요.
+            {isSighting
+              ? "발견한 동물의 정보를 입력해주세요."
+              : "잃어버린 동물의 정보를 입력해주세요."}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -367,23 +383,26 @@ export default function NewSightingPage() {
             {/* 설명 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                설명
+                {isSighting ? "특징 설명" : "동물 특징"}
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="동물의 특징, 상태 등을 입력해주세요"
+                placeholder={
+                  isSighting
+                    ? "동물의 특징, 상태 등을 입력해주세요"
+                    : "이름, 색상, 크기, 특이사항 등을 자세히 입력해주세요"
+                }
                 rows={3}
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
               />
             </div>
 
-                        {/* 사진 */}
+            {/* 사진 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 사진 <span className="text-gray-400">(선택)</span>
               </label>
-
 
               {imagePreview ? (
                 <div className="relative">
@@ -428,14 +447,18 @@ export default function NewSightingPage() {
                 disabled={locationLoading}
                 className="w-full rounded-xl bg-blue-50 border border-blue-200 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:bg-blue-50 disabled:text-blue-300 transition-colors"
               >
-                {locationLoading ? "현재 위치 확인 중..." : "📍 현재 위치로 재설정"}
+                {locationLoading
+                  ? "현재 위치 확인 중..."
+                  : isSighting
+                    ? "📍 현재 위치로 재설정"
+                    : "📍 마지막으로 본 위치로 설정"}
               </button>
             </div>
 
             {/* 작은 지도 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                위치 선택
+                {isSighting ? "목격 위치" : "마지막으로 본 위치"}
               </label>
 
               <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 relative">
@@ -460,7 +483,6 @@ export default function NewSightingPage() {
                       }}
                     />
 
-                    {/* 화면 중앙 고정 핀 */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                       <div className="flex flex-col items-center">
                         <span className="text-3xl drop-shadow-lg">📍</span>
@@ -471,7 +493,9 @@ export default function NewSightingPage() {
               </div>
 
               <p className="mt-2 text-xs text-gray-500">
-                지도를 클릭하거나 움직여서 위치를 선택할 수 있습니다.
+                {isSighting
+                  ? "지도를 움직여서 목격 위치를 선택할 수 있습니다."
+                  : "지도를 움직여서 마지막으로 본 위치를 선택해주세요."}
               </p>
             </div>
 
@@ -494,7 +518,11 @@ export default function NewSightingPage() {
                 type="text"
                 value={locationDetail}
                 onChange={(e) => setLocationDetail(e.target.value)}
-                placeholder="예: 자판기 옆 벤치, 아파트 정문 앞"
+                placeholder={
+                  isSighting
+                    ? "예: 자판기 옆 벤치, 아파트 정문 앞"
+                    : "예: 산책 중 놓친 장소, 집 앞 골목"
+                }
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
@@ -517,9 +545,17 @@ export default function NewSightingPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-semibold py-3 transition-colors"
+                className={`flex-1 rounded-xl text-white font-semibold py-3 transition-colors ${
+                  isSighting
+                    ? "bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
+                    : "bg-rose-500 hover:bg-rose-600 disabled:bg-rose-300"
+                }`}
               >
-                {loading ? "등록 중..." : "신고 등록"}
+                {loading
+                  ? "등록 중..."
+                  : isSighting
+                    ? "목격 신고"
+                    : "실종 등록"}
               </button>
             </div>
           </form>

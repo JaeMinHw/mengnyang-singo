@@ -25,6 +25,7 @@ def sighting_to_response(sighting: Sighting) -> dict:
         "longitude": sighting.longitude,
         "address": sighting.address,
         "status": sighting.status,
+        "post_type": sighting.post_type,
         "created_at": sighting.created_at,
         "updated_at": sighting.updated_at,
     }
@@ -36,9 +37,18 @@ def create_sighting(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    sighting_data = data.model_dump()
+
+    # post_type에 따라 기본 상태 설정
+    if sighting_data.get("post_type") == "LOST":
+        default_status = "LOST"
+    else:
+        default_status = "SPOTTED"
+
     sighting = Sighting(
-        **data.model_dump(),
+        **sighting_data,
         user_id=current_user.id,
+        status=default_status,
     )
     db.add(sighting)
     db.commit()
