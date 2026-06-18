@@ -28,14 +28,23 @@ export default function SightingListPanel({
           <h2 className="font-semibold text-lg text-gray-900">
             신고 목록 ({sightings.length})
           </h2>
-          <input
-            type="text"
-            value={searchQuery}
-            style={{ color: 'black' }} 
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="검색 (예: 검정 고양이, 흰색 강아지)"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="검색 (예: 검정 고양이, 흰색 강아지)"
+              className="w-full px-3 py-2 pr-8 text-sm text-black placeholder:text-gray-400 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-gray-300 hover:bg-gray-400 text-white text-xs transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -57,7 +66,7 @@ export default function SightingListPanel({
           bg-white rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)]
           flex flex-col
           transition-all duration-300 ease-in-out
-          ${isExpanded ? "h-[65dvh]" : "h-[12dvh]"}
+          ${isExpanded ? "h-[65dvh]" : "h-[18dvh] min-h-[120px]"}
         `}
       >
         <div>
@@ -76,19 +85,30 @@ export default function SightingListPanel({
           </div>
         </div>
 
-        {isExpanded && (
-          <div className="px-4 pb-2">
+
+          <div className="relative">
             <input
               type="text"
               value={searchQuery}
-              style={{ color: 'black' }} 
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="검색 (예: 검정 고양이)"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
+              className="w-7/8 mx-auto block px-3 py-2 pr-8 text-base text-black placeholder:text-gray-400 border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
               onClick={(e) => e.stopPropagation()}
             />
+            {searchQuery && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSearchChange("");
+                }}
+                className="absolute right-8 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-gray-300 hover:bg-gray-400 text-white text-xs transition-colors"
+              >
+                ✕
+              </button>
+            )}
           </div>
-        )}
+
+
       </div>
 
         <div className="flex-1 overflow-y-auto border-t border-gray-100">
