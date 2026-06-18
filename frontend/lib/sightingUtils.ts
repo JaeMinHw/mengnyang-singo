@@ -96,3 +96,76 @@ export const openKakaoMapSearch = (query: string) => {
     }
   }, 800);
 };
+
+
+// =============================================
+// 검색용 동의어 정규화
+// =============================================
+
+const synonymGroups: string[][] = [
+  // 색상
+  ["검정", "검정색", "검은색", "까만", "블랙", "black", "검은"],
+  ["흰색", "하얀", "하얀색", "화이트", "white"],
+  ["갈색", "브라운", "brown"],
+  ["회색", "그레이", "grey", "gray"],
+  ["노란색", "노랑", "황색", "옐로우", "yellow"],
+  ["주황색", "주황", "오렌지", "orange"],
+  ["베이지", "베이지색", "크림색"],
+  ["고등어", "고등어색"],
+
+  // 무늬
+  ["삼색", "삼색이", "세가지색"],
+  ["얼룩", "점박이", "반점"],
+  ["줄무늬", "호랑이무늬", "타이거"],
+  ["턱시도", "턱시도무늬"],
+
+  // 크기
+  ["소형", "작은", "소형견"],
+  ["중형", "중간", "중형견"],
+  ["대형", "큰", "대형견"],
+
+  // 기타 특징
+  ["장모", "장털", "긴털"],
+  ["단모", "단털", "짧은털"],
+];
+
+// 동의어 → 대표어 맵 생성
+const synonymMap = new Map<string, string>();
+synonymGroups.forEach((group) => {
+  const representative = group[0]; // 첫 번째가 대표어
+  group.forEach((word) => {
+    synonymMap.set(word.toLowerCase(), representative);
+  });
+});
+
+export const normalizeSearchText = (text: string): string => {
+  if (!text) return "";
+
+  let normalized = text.toLowerCase();
+
+  // 동의어를 대표어로 치환
+  synonymMap.forEach((representative, synonym) => {
+    // 단어 경계를 고려해서 치환 (부분 매칭 방지)
+    const regex = new RegExp(synonym, "gi");
+    normalized = normalized.replace(regex, representative);
+  });
+
+  return normalized;
+};
+
+export const matchesSearch = (
+  sighting: { address: string | null; description: string | null },
+  searchQuery: string
+): boolean => {
+  if (!searchQuery.trim()) return true;
+
+  const normalizedQuery = normalizeSearchText(searchQuery);
+  const queryWords = normalizedQuery.split(/\s+/).filter(Boolean);
+
+  const targetText = normalizeSearchText(
+    [sighting.address || "", sighting.description || ""].join(" ")
+  );
+
+  // 모든 검색어가 포함되어야 매칭 (AND 조건)
+  return queryWords.every((word) => targetText.includes(word));
+};

@@ -7,6 +7,8 @@ interface SightingListPanelProps {
   onSelect: (sighting: Sighting) => void;
   isExpanded: boolean;
   onToggle: () => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 export default function SightingListPanel({
@@ -15,15 +17,25 @@ export default function SightingListPanel({
   onSelect,
   isExpanded,
   onToggle,
+  searchQuery,
+  onSearchChange,
 }: SightingListPanelProps) {
   return (
     <>
       {/* ===== PC: 오른쪽 사이드 패널 ===== */}
       <div className="hidden lg:flex w-96 bg-white border-l border-gray-200 flex-col overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
+        <div className="p-4 border-b border-gray-200 bg-gray-50 space-y-3">
           <h2 className="font-semibold text-lg text-gray-900">
             신고 목록 ({sightings.length})
           </h2>
+          <input
+            type="text"
+            value={searchQuery}
+            style={{ color: 'black' }} 
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="검색 (예: 검정 고양이, 흰색 강아지)"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -48,6 +60,7 @@ export default function SightingListPanel({
           ${isExpanded ? "h-[65dvh]" : "h-[12dvh]"}
         `}
       >
+        <div>
         <div className="cursor-pointer select-none" onClick={onToggle}>
           <div className="flex justify-center pt-2 pb-1">
             <div className="w-10 h-1.5 rounded-full bg-gray-300" />
@@ -62,6 +75,21 @@ export default function SightingListPanel({
             </span>
           </div>
         </div>
+
+        {isExpanded && (
+          <div className="px-4 pb-2">
+            <input
+              type="text"
+              value={searchQuery}
+              style={{ color: 'black' }} 
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="검색 (예: 검정 고양이)"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+      </div>
 
         <div className="flex-1 overflow-y-auto border-t border-gray-100">
           {sightings.length === 0 ? (

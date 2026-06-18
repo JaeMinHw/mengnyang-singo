@@ -8,7 +8,8 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import Header from "@/components/Header";
 import type { Sighting, ClusterInfo, CurrentUser } from "@/types/sighting";
-import { animalConfig, statusConfig } from "@/lib/sightingUtils";
+import { animalConfig, statusConfig, matchesSearch } from "@/lib/sightingUtils";
+
 
 
 import SightingDetailModal from "@/components/SightingDetailModal";
@@ -34,6 +35,9 @@ export default function Home() {
   const [lastSelectedId, setLastSelectedId] = useState<number | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
 
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
@@ -65,9 +69,10 @@ export default function Home() {
     return sightings.filter((s) => {
       const matchAnimal = filter === "all" || s.animal_type === filter;
       const matchStatus = statusFilter === "all" || s.status === statusFilter;
-      return matchAnimal && matchStatus;
+      const matchSearch = matchesSearch(s, searchQuery);
+      return matchAnimal && matchStatus && matchSearch;
     });
-  }, [sightings, filter, statusFilter]);
+  }, [sightings, filter, statusFilter, searchQuery]);
 
   // MapWithLogic에서 bounds 변경 시 호출됨
   const handleBoundsChange = useCallback((visible: Sighting[]) => {
@@ -234,6 +239,8 @@ export default function Home() {
             onSelect={handleSightingSelect}
             isExpanded={isListExpanded}
             onToggle={() => setIsListExpanded(!isListExpanded)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
         </div>
       </main>

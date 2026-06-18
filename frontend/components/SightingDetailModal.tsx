@@ -105,13 +105,13 @@ export default function SightingDetailModal({
           {/* 주소 */}
           {(main || detail) && (
             <a
-              href={getKakaoMapSearchLink(
-                [main, detail].filter(Boolean).join(" ")
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={getKakaoMapSearchLink([main, detail].filter(Boolean).join(" "))}
               className="block bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition-colors cursor-pointer group"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openKakaoMapSearch([main, detail].filter(Boolean).join(" "));
+              }}
             >
               {main && (
                 <p className="text-base font-semibold text-blue-700 underline underline-offset-4 decoration-blue-300 group-hover:text-blue-800 group-hover:decoration-blue-500 transition-colors">
@@ -128,7 +128,6 @@ export default function SightingDetailModal({
               </p>
             </a>
           )}
-
           {/* 설명 */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">설명</p>
