@@ -26,6 +26,7 @@ interface SightingDetailModalProps {
   onClose: () => void;
   onImageClick: (imageUrl: string) => void;
   onStatusChange: (sightingId: number, newStatus: string) => void;
+  onDelete: (sightingId: number) => void;
   onRelatedClick: (sighting: Sighting) => void;
 }
 
@@ -43,6 +44,7 @@ export default function SightingDetailModal({
   onClose,
   onImageClick,
   onStatusChange,
+  onDelete,
   onRelatedClick,
 }: SightingDetailModalProps) {
   const { main, detail } = parseAddress(sighting.address);
@@ -200,6 +202,23 @@ export default function SightingDetailModal({
               </div>
             </div>
           )}
+
+          {/* 작성자 전용: 삭제 */}
+          {isOwner && (
+            <div className="border-t border-gray-100 pt-3">
+              <button
+                onClick={() => {
+                  if (window.confirm("정말 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.")) {
+                    onDelete(sighting.id);
+                  }
+                }}
+                className="w-full py-2 text-sm font-medium text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
+              >
+                🗑️ 이 글 삭제하기
+              </button>
+            </div>
+          )}
+
           {/* 관련 글 추천 */}
           {relatedSightings.length > 0 && (
             <div className="border-t border-gray-100 pt-4">

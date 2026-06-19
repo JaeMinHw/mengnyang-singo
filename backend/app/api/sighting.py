@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -101,6 +102,7 @@ def get_sightings(
     db: Session = Depends(get_db)
 ):
     query = db.query(Sighting)
+    query = query.filter(Sighting.is_deleted == False)
 
     if animal_type:
         query = query.filter(Sighting.animal_type == animal_type)
@@ -117,8 +119,9 @@ def get_nearby_sightings(
     lng: float = Query(...),
     radius: float = Query(default=0.01),
     db: Session = Depends(get_db)
-):
+    ):
     sightings = db.query(Sighting).filter(
+        Sighting.is_deleted == False,
         Sighting.latitude.between(lat - radius, lat + radius),
         Sighting.longitude.between(lng - radius, lng + radius)
     ).order_by(Sighting.created_at.desc()).all()
@@ -128,7 +131,33 @@ def get_nearby_sightings(
 
 @router.get("/sightings/{sighting_id}", response_model=SightingResponse)
 def get_sighting(sighting_id: int, db: Session = Depends(get_db)):
-    sighting = db.query(Sighting).filter(Sighting.id == sighting_id).first()
+    sighting = db.query(Sighting).filter(
+        Sighting.id == sighting_id,
+        Sighting.is_deleted == False,
+    ).first()
     if not sighting:
         raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다")
     return sighting_to_response(sighting)
+
+
+@router.delete("/sightings/{sighting_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sighting(
+    sighting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sighting = db.query(Sighting).filter(Sighting.id == sighting_id).first()
+
+    if not sighting:
+        raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다")
+
+    if sighting.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 글만 삭제할 수 있습니다")
+
+    if sighting.is_deleted:
+        raise HTTPException(status_code=404, detail="이미 삭제된 글입니다")
+
+    sighting.is_deleted = True
+    db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

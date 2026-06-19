@@ -138,6 +138,28 @@ export default function Home() {
       alert("상태 변경에 실패했습니다. 다시 시도해주세요.");
     }
   };
+
+    const handleDelete = async (sightingId: number) => {
+    try {
+      await api.delete(`/sightings/${sightingId}`);
+
+      // 목록에서 즉시 제거
+      setSightings((prev) => prev.filter((s) => s.id !== sightingId));
+
+      // 모달 닫기
+      setDetailSighting(null);
+
+    } catch (err: any) {
+      console.error("삭제 실패:", err);
+
+      if (err?.response?.status === 403) {
+        alert("본인이 작성한 글만 삭제할 수 있습니다.");
+      } else {
+        alert("삭제에 실패했습니다. 다시 시도해주세요.");
+      }
+    }
+  };
+
   const relatedSightings = useMemo<RelatedSightingResult[]>(() => {
       if (!detailSighting) return [];
 
@@ -158,6 +180,7 @@ export default function Home() {
             setFullImageUrl(url);
           }}
           onStatusChange={handleStatusChange}
+          onDelete={handleDelete}
           onRelatedClick={(related) => {
             setDetailSighting(related);
             setSelectedSightingId(related.id);
