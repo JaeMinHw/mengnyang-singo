@@ -158,7 +158,11 @@ export default function Home() {
             setFullImageUrl(url);
           }}
           onStatusChange={handleStatusChange}
-          onRelatedClick={(related) => setDetailSighting(related)}
+          onRelatedClick={(related) => {
+            setDetailSighting(related);
+            setSelectedSightingId(related.id);
+            setFocusedSighting({ ...related });
+          }}
         />
       )}
 
