@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
 import type { Sighting } from "@/types/sighting";
 import {
   animalConfig,
   statusConfig,
   postTypeConfig,
   formatDate,
+  formatDateShort,
   parseAddress,
   getKakaoMapSearchLink,
   openKakaoMapSearch,
+  formatDistance,
+  type RelatedSightingResult,
 } from "@/lib/sightingUtils";
 
 
@@ -18,9 +22,11 @@ import {
 interface SightingDetailModalProps {
   sighting: Sighting;
   currentUserId: number | null;
+  relatedSightings: RelatedSightingResult[];
   onClose: () => void;
   onImageClick: (imageUrl: string) => void;
   onStatusChange: (sightingId: number, newStatus: string) => void;
+  onRelatedClick: (sighting: Sighting) => void;
 }
 
 
@@ -33,12 +39,30 @@ const ALLOWED_STATUSES_BY_POST_TYPE: Record<string, string[]> = {
 export default function SightingDetailModal({
   sighting,
   currentUserId,
+  relatedSightings,
   onClose,
   onImageClick,
   onStatusChange,
+  onRelatedClick,
 }: SightingDetailModalProps) {
   const { main, detail } = parseAddress(sighting.address);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // 글이 바뀌면 스크롤 맨 위로 + 전환 효과
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+
+    setIsTransitioning(true);
+    const timer = setTimeout(() => setIsTransitioning(false), 300);
+
+    return () => clearTimeout(timer);
+  }, [sighting.id]);
+
 
   const statusInfo = statusConfig[sighting.status] || {
     label: sighting.status,
@@ -66,7 +90,10 @@ export default function SightingDetailModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto shadow-xl"
+        ref={scrollRef}
+        className={`bg-white rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto shadow-xl transition-opacity duration-100 ${
+          isTransitioning ? "opacity-0" : "opacity-100"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {sighting.image_url ? (
@@ -173,7 +200,95 @@ export default function SightingDetailModal({
               </div>
             </div>
           )}
+          {/* 관련 글 추천 */}
+          {relatedSightings.length > 0 && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-semibold text-gray-800 mb-3">
+                {sighting.post_type === "LOST"
+                  ? "이 근처에서 확인된 관련 목격 글"
+                  : "이 근처의 관련 실종 글"}
+              </p>
 
+              <div className="space-y-2">
+                {relatedSightings.map(({ sighting: related, distanceMeters, matchedFeatures }) => {
+                  const relatedType =
+                    postTypeConfig[related.post_type] || postTypeConfig["SIGHTING"];
+                  const relatedStatus =
+                    statusConfig[related.status] || {
+                      label: related.status,
+                      color: "bg-gray-100 text-gray-700",
+                    };
+
+                  return (
+                    <div
+                      key={related.id}
+                      className="rounded-xl border border-gray-200 bg-gray-50 p-3 cursor-pointer hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                      onClick={() => onRelatedClick(related)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${relatedType.color}`}
+                            >
+                              {relatedType.emoji} {relatedType.label}
+                            </span>
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${relatedStatus.color}`}
+                            >
+                              {relatedStatus.label}
+                            </span>
+                          </div>
+
+                          <p className="text-sm font-medium text-gray-900">
+                            {animalConfig[related.animal_type]?.label || "동물"}
+                            {related.post_type === "LOST" ? " 실종" : " 발견"}
+                          </p>
+
+                          {related.description && (
+                            <p className="text-sm text-gray-600 line-clamp-2 mt-1">
+                              {related.description}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
+                            <span>{formatDistance(distanceMeters)}</span>
+                            <span>·</span>
+                            <span>{formatDateShort(related.created_at)}</span>
+                          </div>
+
+                          {matchedFeatures.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {matchedFeatures.map((feature) => (
+                                <span
+                                  key={`${related.id}-${feature}`}
+                                  className="text-[11px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700"
+                                >
+                                  #{feature}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {related.image_url ? (
+                          <img
+                            src={related.image_url}
+                            alt="관련 글 썸네일"
+                            className="w-16 h-16 object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-2xl flex-shrink-0">
+                            {animalConfig[related.animal_type]?.emoji || "🐾"}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {/* 신고 번호 + 작성자 */}
           <div className="border-t border-gray-100 pt-3 space-y-2">
             <p className="text-xs text-gray-400">신고 번호: #{sighting.id}</p>

@@ -7,7 +7,12 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 import Header from "@/components/Header";
 import type { Sighting, CurrentUser } from "@/types/sighting";
-import { animalConfig, postTypeConfig, matchesSearch } from "@/lib/sightingUtils";
+import {
+  animalConfig,
+  matchesSearch,
+  getRelatedSightings,
+  type RelatedSightingResult,
+} from "@/lib/sightingUtils";
 
 import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
@@ -133,7 +138,11 @@ export default function Home() {
       alert("상태 변경에 실패했습니다. 다시 시도해주세요.");
     }
   };
+  const relatedSightings = useMemo<RelatedSightingResult[]>(() => {
+      if (!detailSighting) return [];
 
+      return getRelatedSightings(detailSighting, sightings);
+    }, [detailSighting, sightings]);
   return (
     <>
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
@@ -142,12 +151,14 @@ export default function Home() {
         <SightingDetailModal
           sighting={detailSighting}
           currentUserId={currentUser?.id ?? null}
+          relatedSightings={relatedSightings}
           onClose={() => setDetailSighting(null)}
           onImageClick={(url) => {
             setDetailSighting(null);
             setFullImageUrl(url);
           }}
           onStatusChange={handleStatusChange}
+          onRelatedClick={(related) => setDetailSighting(related)}
         />
       )}
 

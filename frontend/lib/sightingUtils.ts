@@ -1,3 +1,6 @@
+import type { Sighting } from "@/types/sighting";
+
+
 export const animalConfig: Record<
   string,
   { emoji: string; color: string; label: string }
@@ -278,4 +281,137 @@ export const getHighlightParts = (
       text: part,
       matched: lowerTerms.has(part.toLowerCase()),
     }));
+};
+
+
+export interface RelatedSightingResult {
+  sighting: Sighting;
+  distanceMeters: number;
+  matchedFeatures: string[];
+}
+
+export const RELATED_SIGHTING_MAX_DISTANCE_METERS = 3000;
+export const RELATED_SIGHTING_MAX_RESULTS = 10;
+
+export const getDistanceInMeters = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number => {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
+export const extractFeatureKeywords = (text: string | null): string[] => {
+  if (!text) return [];
+
+  const normalized = normalizeSearchText(text);
+  const matched = new Set<string>();
+
+  representativeToGroup.forEach((_group, representative) => {
+    if (normalized.includes(representative)) {
+      matched.add(representative);
+    }
+  });
+
+  return Array.from(matched);
+};
+
+export const formatDistance = (distanceMeters: number): string => {
+  if (distanceMeters < 1000) {
+    return `${Math.round(distanceMeters)}m`;
+  }
+
+  return `${(distanceMeters / 1000).toFixed(1)}km`;
+};
+
+export const getRelatedSightings = (
+  baseSighting: Sighting,
+  allSightings: Sighting[],
+  options?: {
+    maxDistanceMeters?: number;
+    maxResults?: number;
+  }
+): RelatedSightingResult[] => {
+  const maxDistanceMeters =
+    options?.maxDistanceMeters ?? RELATED_SIGHTING_MAX_DISTANCE_METERS;
+  const maxResults =
+    options?.maxResults ?? RELATED_SIGHTING_MAX_RESULTS;
+
+  const baseFeatures = extractFeatureKeywords(baseSighting.description);
+  const baseFeatureSet = new Set(baseFeatures);
+
+  const scored = allSightings
+    .filter((candidate) => candidate.id !== baseSighting.id)
+    .filter((candidate) => candidate.animal_type === baseSighting.animal_type)
+    .filter((candidate) => candidate.status !== "FOUND")
+    .map((candidate) => {
+      const distanceMeters = getDistanceInMeters(
+        baseSighting.latitude,
+        baseSighting.longitude,
+        candidate.latitude,
+        candidate.longitude
+      );
+
+      const candidateFeatures = extractFeatureKeywords(candidate.description);
+      const matchedFeatures = candidateFeatures.filter((feature) =>
+        baseFeatureSet.has(feature)
+      );
+
+      // 교차 추천(다른 post_type)이면 가산점
+      const isCrossType = candidate.post_type !== baseSighting.post_type;
+
+      return {
+        sighting: candidate,
+        distanceMeters,
+        matchedFeatures,
+        isCrossType,
+      };
+    })
+    .filter((item) => item.distanceMeters <= maxDistanceMeters);
+
+  // 정렬: 교차 추천 우선 → 특징 많이 겹침 → 가까움 → 최신
+  scored.sort((a, b) => {
+    // 1. 교차 추천(실종↔목격)이 먼저
+    if (a.isCrossType !== b.isCrossType) {
+      return a.isCrossType ? -1 : 1;
+    }
+
+    // 2. 특징 키워드 많이 겹치는 순
+    if (b.matchedFeatures.length !== a.matchedFeatures.length) {
+      return b.matchedFeatures.length - a.matchedFeatures.length;
+    }
+
+    // 3. 가까운 순
+    if (a.distanceMeters !== b.distanceMeters) {
+      return a.distanceMeters - b.distanceMeters;
+    }
+
+    // 4. 최신 순
+    return (
+      new Date(b.sighting.created_at).getTime() -
+      new Date(a.sighting.created_at).getTime()
+    );
+  });
+
+  return scored.slice(0, maxResults).map(({ sighting, distanceMeters, matchedFeatures }) => ({
+    sighting,
+    distanceMeters,
+    matchedFeatures,
+  }));
 };
