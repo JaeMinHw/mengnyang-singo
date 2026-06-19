@@ -25,7 +25,10 @@ interface SightingDetailModalProps {
 
 
 
-const ALL_STATUSES = ["SPOTTED", "LOST", "PROTECTING", "FOUND"];
+const ALLOWED_STATUSES_BY_POST_TYPE: Record<string, string[]> = {
+  SIGHTING: ["SPOTTED", "PROTECTING", "FOUND"],
+  LOST: ["LOST", "PROTECTING", "FOUND"],
+};
 
 export default function SightingDetailModal({
   sighting,
@@ -44,6 +47,8 @@ export default function SightingDetailModal({
   };
 
   const isOwner = currentUserId !== null && currentUserId === sighting.user_id;
+
+  const allowedStatuses = ALLOWED_STATUSES_BY_POST_TYPE[sighting.post_type] || ALLOWED_STATUSES_BY_POST_TYPE["SIGHTING"];
 
   const handleStatusChange = async (newStatus: string) => {
     if (statusLoading) return;
@@ -151,18 +156,20 @@ export default function SightingDetailModal({
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-medium text-gray-500 mb-2">상태 변경</p>
               <div className="flex gap-2 flex-wrap">
-                {ALL_STATUSES.filter((s) => s !== sighting.status).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleStatusChange(s)}
-                    disabled={statusLoading}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition
-                      ${statusConfig[s]?.color || "bg-gray-100 text-gray-700"}
-                      border-transparent hover:opacity-80 disabled:opacity-50`}
-                  >
-                    {statusLoading ? "변경 중..." : `→ ${statusConfig[s]?.label}`}
-                  </button>
-                ))}
+                {allowedStatuses
+                  .filter((s) => s !== sighting.status)
+                  .map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleStatusChange(s)}
+                      disabled={statusLoading}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition
+                        ${statusConfig[s]?.color || "bg-gray-100 text-gray-700"}
+                        border-transparent hover:opacity-80 disabled:opacity-50`}
+                    >
+                      {statusLoading ? "변경 중..." : `→ ${statusConfig[s]?.label}`}
+                    </button>
+                  ))}
               </div>
             </div>
           )}

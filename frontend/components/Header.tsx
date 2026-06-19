@@ -41,9 +41,16 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
           <>
             <Link
               href="/sightings/new"
-              className="text-sm bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition-colors"
+              className="inline-flex items-center justify-center rounded-lg bg-orange-500 px-3 py-2 text-white hover:bg-orange-600 transition-colors"
             >
-              신고하기
+              <span className="text-center leading-tight text-xs sm:text-sm">
+                <span className="sm:hidden">
+                  목격 및 실종
+                  <br />
+                  등록하기
+                </span>
+                <span className="hidden sm:inline">목격 및 실종 등록하기</span>
+              </span>
             </Link>
 
             <span className="text-sm text-gray-700 font-medium">

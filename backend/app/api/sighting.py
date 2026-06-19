@@ -70,6 +70,24 @@ def update_sighting_status(
     if sighting.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="본인이 작성한 신고만 상태를 변경할 수 있습니다")
 
+    allowed_statuses_by_post_type = {
+        "SIGHTING": {"SPOTTED", "PROTECTING", "FOUND"},
+        "LOST": {"LOST", "PROTECTING", "FOUND"},
+    }
+
+    allowed_statuses = allowed_statuses_by_post_type.get(sighting.post_type, set())
+
+    if data.status not in allowed_statuses:
+        if sighting.post_type == "LOST":
+            raise HTTPException(
+                status_code=400,
+                detail="실종 글은 실종, 보호 중, 찾음 상태로만 변경할 수 있습니다",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="목격 글은 목격, 보호 중, 찾음 상태로만 변경할 수 있습니다",
+        )
+
     sighting.status = data.status
     db.commit()
     db.refresh(sighting)

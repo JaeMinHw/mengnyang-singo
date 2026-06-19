@@ -204,32 +204,7 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* 글 종류 필터 */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPostTypeFilter("all")}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition ${
-                    postTypeFilter === "all"
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  전체 글
-                </button>
-                {(["SIGHTING", "LOST"] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setPostTypeFilter(type)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-md transition flex items-center gap-1 ${
-                      postTypeFilter === type
-                        ? `${postTypeConfig[type].bgColor} text-white`
-                        : "bg-white text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    {postTypeConfig[type].emoji} {postTypeConfig[type].label}
-                  </button>
-                ))}
-              </div>
+              
 
             </div>
 
