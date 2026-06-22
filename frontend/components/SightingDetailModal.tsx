@@ -270,6 +270,15 @@ export default function SightingDetailModal({
                             </p>
                           )}
 
+                          {related.address && (() => {
+                            const relatedAddr = parseAddress(related.address);
+                            return relatedAddr.main ? (
+                              <p className="text-xs text-gray-500 mt-1 truncate">
+                                📍 {relatedAddr.main}
+                              </p>
+                            ) : null;
+                          })()}
+
                           <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
                             <span>{formatDistance(distanceMeters)}</span>
                             <span>·</span>

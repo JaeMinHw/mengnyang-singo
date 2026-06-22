@@ -39,9 +39,22 @@ export const postTypeConfig: Record<
   },
 };
 
+const hasTimezoneInfo = (dateString: string) => {
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(dateString);
+};
+
+const parseApiDate = (dateString: string) => {
+  const normalized = hasTimezoneInfo(dateString)
+    ? dateString
+    : `${dateString}Z`;
+
+  return new Date(normalized);
+};
+
 
 export const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("ko-KR", {
+  return parseApiDate(dateString).toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -51,10 +64,21 @@ export const formatDate = (dateString: string) => {
 };
 
 export const formatDateShort = (dateString: string) => {
-  const date = new Date(dateString);
-  return `${date.getFullYear().toString().slice(2)}.${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const date = parseApiDate(dateString);
+
+  const formatter = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+
+  return `${year}.${month}.${day}`;
 };
 
 export const parseAddress = (address: string | null) => {

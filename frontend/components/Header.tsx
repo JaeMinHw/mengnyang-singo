@@ -53,9 +53,12 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
               </span>
             </Link>
 
-            <span className="text-sm text-gray-700 font-medium">
+            <Link
+              href="/mypage"
+              className="text-sm text-gray-700 font-medium hover:text-blue-600 transition-colors underline underline-offset-2"
+            >
               {currentUser.nickname}님
-            </span>
+            </Link>
 
             <button
               onClick={handleLogout}

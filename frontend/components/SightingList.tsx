@@ -41,7 +41,8 @@ export default function SightingList({
   return (
     <ul className="divide-y divide-gray-100">
       {sightings.map((sighting) => {
-        const typeConf = postTypeConfig[sighting.post_type] || postTypeConfig["SIGHTING"];
+        const typeConf =
+          postTypeConfig[sighting.post_type] || postTypeConfig["SIGHTING"];
 
         return (
           <li
@@ -52,17 +53,29 @@ export default function SightingList({
             }`}
           >
             <div className="flex items-start gap-3">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-lg flex-shrink-0 ${
-                  animalConfig[sighting.animal_type]?.color || "bg-gray-500"
-                }`}
-              >
-                {animalConfig[sighting.animal_type]?.emoji || "🐾"}
-              </div>
+              {/* 왼쪽: 썸네일 또는 동물 아이콘 */}
+              {sighting.image_url ? (
+                <img
+                  src={sighting.image_url}
+                  alt="썸네일"
+                  className="w-16 h-16 rounded-xl object-cover border border-gray-200 flex-shrink-0"
+                />
+              ) : (
+                <div
+                  className={`w-16 h-16 rounded-xl flex items-center justify-center text-white text-2xl flex-shrink-0 ${
+                    animalConfig[sighting.animal_type]?.color || "bg-gray-500"
+                  }`}
+                >
+                  {animalConfig[sighting.animal_type]?.emoji || "🐾"}
+                </div>
+              )}
 
+              {/* 오른쪽: 텍스트 정보 */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${typeConf.color}`}>
+                  <span
+                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${typeConf.color}`}
+                  >
                     {typeConf.emoji} {typeConf.label}
                   </span>
 
@@ -73,20 +86,13 @@ export default function SightingList({
 
                   <span
                     className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                      statusConfig[sighting.status]?.color || "bg-gray-100 text-gray-700"
+                      statusConfig[sighting.status]?.color ||
+                      "bg-gray-100 text-gray-700"
                     }`}
                   >
                     {statusConfig[sighting.status]?.label || sighting.status}
                   </span>
                 </div>
-
-                {sighting.image_url && (
-                  <img
-                    src={sighting.image_url}
-                    alt="신고 썸네일"
-                    className="w-full h-24 object-cover rounded-xl border border-gray-200 mt-2"
-                  />
-                )}
 
                 {sighting.address &&
                   (() => {
@@ -94,13 +100,21 @@ export default function SightingList({
                     return (
                       <>
                         {main && (
-                          <p className="text-sm text-gray-600 truncate mt-2">
-                            📍 {renderHighlightedText(main, `${sighting.id}-address-main`)}
+                          <p className="text-sm text-gray-600 truncate mt-1">
+                            📍{" "}
+                            {renderHighlightedText(
+                              main,
+                              `${sighting.id}-address-main`
+                            )}
                           </p>
                         )}
                         {detail && (
                           <p className="text-xs text-gray-400 truncate">
-                            └ {renderHighlightedText(detail, `${sighting.id}-address-detail`)}
+                            └{" "}
+                            {renderHighlightedText(
+                              detail,
+                              `${sighting.id}-address-detail`
+                            )}
                           </p>
                         )}
                       </>

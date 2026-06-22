@@ -95,6 +95,25 @@ def update_sighting_status(
 
     return sighting_to_response(sighting)
 
+
+
+@router.get("/my-sightings", response_model=List[SightingResponse])
+def get_my_sightings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sightings = (
+        db.query(Sighting)
+        .filter(
+            Sighting.user_id == current_user.id,
+            Sighting.is_deleted == False,
+        )
+        .order_by(Sighting.created_at.desc())
+        .all()
+    )
+
+    return [sighting_to_response(s) for s in sightings]
+
 @router.get("/sightings", response_model=List[SightingResponse])
 def get_sightings(
     animal_type: Optional[str] = Query(None),
@@ -161,3 +180,5 @@ def delete_sighting(
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
