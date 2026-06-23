@@ -81,6 +81,14 @@ export const formatDateShort = (dateString: string) => {
   return `${year}.${month}.${day}`;
 };
 
+export const isEdited = (createdAt: string, updatedAt: string): boolean => {
+  const created = parseApiDate(createdAt);
+  const updated = parseApiDate(updatedAt);
+
+  // 1분 이상 차이나면 수정된 것으로 판단
+  return Math.abs(updated.getTime() - created.getTime()) > 60_000;
+};
+
 export const parseAddress = (address: string | null) => {
   if (!address) return { main: null, detail: null };
 

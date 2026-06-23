@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Map as KakaoMap, MapMarker } from "react-kakao-maps-sdk";
 
 import type { Sighting } from "@/types/sighting";
 import {
@@ -13,10 +14,11 @@ import {
   getKakaoMapSearchLink,
   openKakaoMapSearch,
   formatDistance,
+  isEdited,
   type RelatedSightingResult,
 } from "@/lib/sightingUtils";
 
-
+import { useRouter } from "next/navigation";
 
 
 interface SightingDetailModalProps {
@@ -47,6 +49,9 @@ export default function SightingDetailModal({
   onDelete,
   onRelatedClick,
 }: SightingDetailModalProps) {
+  const router = useRouter();
+  const [kakaoReady, setKakaoReady] = useState(false);
+
   const { main, detail } = parseAddress(sighting.address);
   const [statusLoading, setStatusLoading] = useState(false);
 
@@ -65,6 +70,29 @@ export default function SightingDetailModal({
     return () => clearTimeout(timer);
   }, [sighting.id]);
 
+  useEffect(() => {
+  const checkKakao = () => {
+      if (
+        typeof window !== "undefined" &&
+        window.kakao &&
+        window.kakao.maps
+      ) {
+        setKakaoReady(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (!checkKakao()) {
+      const timer = setInterval(() => {
+        if (checkKakao()) {
+          clearInterval(timer);
+        }
+      }, 200);
+
+      return () => clearInterval(timer);
+    }
+  }, []);
 
   const statusInfo = statusConfig[sighting.status] || {
     label: sighting.status,
@@ -127,6 +155,11 @@ export default function SightingDetailModal({
                 </p>
                 <p className="text-xs text-gray-400">
                   {formatDate(sighting.created_at)}
+                  {isEdited(sighting.created_at, sighting.updated_at) && (
+                    <span className="ml-1 text-gray-400">
+                      (수정됨 {formatDate(sighting.updated_at)})
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -145,6 +178,23 @@ export default function SightingDetailModal({
               </span>
             </div>
           </div>
+
+          {/* 주소 */}
+          {/* 미니 지도 */}
+          {kakaoReady && (
+            <div className="rounded-xl overflow-hidden border border-gray-200">
+              <KakaoMap
+                center={{ lat: sighting.latitude, lng: sighting.longitude }}
+                level={4}
+                style={{ width: "100%", height: "180px" }}
+
+              >
+                <MapMarker
+                  position={{ lat: sighting.latitude, lng: sighting.longitude }}
+                />
+              </KakaoMap>
+            </div>
+          )}
 
           {/* 주소 */}
           {(main || detail) && (
@@ -204,8 +254,19 @@ export default function SightingDetailModal({
           )}
 
           {/* 작성자 전용: 삭제 */}
+          {/* 작성자 전용: 수정 / 삭제 */}
           {isOwner && (
-            <div className="border-t border-gray-100 pt-3">
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <button
+                onClick={() => {
+                  onClose();
+                  router.push(`/sightings/${sighting.id}/edit`);
+                }}
+                className="w-full py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+              >
+                ✏️ 이 글 수정하기
+              </button>
+
               <button
                 onClick={() => {
                   if (window.confirm("정말 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.")) {

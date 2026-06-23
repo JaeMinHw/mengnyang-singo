@@ -6,6 +6,7 @@ import {
   formatDate,
   parseAddress,
   getHighlightParts,
+  isEdited,
 } from "@/lib/sightingUtils";
 
 interface SightingListProps {
@@ -132,6 +133,9 @@ export default function SightingList({
 
                 <p className="text-xs text-gray-400 mt-1">
                   {formatDate(sighting.created_at)}
+                  {isEdited(sighting.created_at, sighting.updated_at) && (
+                    <span className="text-gray-400"> · 수정됨</span>
+                  )}
                   {sighting.user_nickname && ` · ${sighting.user_nickname}`}
                 </p>
               </div>

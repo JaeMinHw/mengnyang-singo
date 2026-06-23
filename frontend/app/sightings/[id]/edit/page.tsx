@@ -1,0 +1,647 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import exifr from "exifr";
+import Script from "next/script";
+import { Map as KakaoMap } from "react-kakao-maps-sdk";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+
+import api from "@/lib/api";
+import { getAccessToken } from "@/lib/auth";
+import Header from "@/components/Header";
+import type { CurrentUser, Sighting } from "@/types/sighting";
+import {
+  parseAddress,
+  getDistanceInMeters,
+  formatDate,
+} from "@/lib/sightingUtils";
+
+export default function EditSightingPage() {
+  const router = useRouter();
+  const params = useParams();
+  const sightingId = Array.isArray(params.id) ? params.id[0] : params.id;
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  const [postType, setPostType] = useState<"SIGHTING" | "LOST">("SIGHTING");
+  const [animalType, setAnimalType] = useState("CAT");
+  const [description, setDescription] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [address, setAddress] = useState("");
+  const [locationDetail, setLocationDetail] = useState("");
+
+  const [hasChosenLocation, setHasChosenLocation] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef<kakao.maps.Map | null>(null);
+
+  const isSighting = postType === "SIGHTING";
+
+  const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`;
+
+  const cleanupPreviewUrl = (url: string | null) => {
+    if (url && url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const reverseGeocode = useCallback((lat: number, lng: number) => {
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
+
+    const geocoder = new window.kakao.maps.services.Geocoder();
+
+    geocoder.coord2Address(lng, lat, (result: any, status: any) => {
+      if (status === window.kakao.maps.services.Status.OK && result[0]) {
+        const addr = result[0].road_address
+          ? result[0].road_address.address_name
+          : result[0].address.address_name;
+        setAddress(addr);
+      }
+    });
+  }, []);
+
+  const applyPosition = useCallback(
+    (lat: number, lng: number) => {
+      setLatitude(lat.toString());
+      setLongitude(lng.toString());
+      reverseGeocode(lat, lng);
+      setHasChosenLocation(true);
+
+      if (mapRef.current) {
+        const target = new window.kakao.maps.LatLng(lat, lng);
+        mapRef.current.setCenter(target);
+      }
+    },
+    [reverseGeocode]
+  );
+
+  const updatePositionFromMapCenter = (map: kakao.maps.Map) => {
+    const center = map.getCenter();
+    const lat = center.getLat();
+    const lng = center.getLng();
+
+    setLatitude(lat.toString());
+    setLongitude(lng.toString());
+    reverseGeocode(lat, lng);
+    setHasChosenLocation(true);
+  };
+
+  const handleScriptLoad = () => {
+    window.kakao.maps.load(() => {
+      setMapLoading(false);
+    });
+  };
+
+  useEffect(() => {
+    if (window.kakao && window.kakao.maps) {
+      setMapLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sightingId) {
+      setErrorMessage("잘못된 접근입니다.");
+      setPageLoading(false);
+      setAuthLoading(false);
+      return;
+    }
+
+    Promise.all([
+      api.get<CurrentUser>("/me"),
+      api.get<Sighting>(`/sightings/${sightingId}`),
+    ])
+      .then(([meRes, sightingRes]) => {
+        const me = meRes.data;
+        const sighting = sightingRes.data;
+
+        setCurrentUser(me);
+
+        if (me.id !== sighting.user_id) {
+          alert("본인이 작성한 글만 수정할 수 있습니다.");
+          router.push("/mypage");
+          return;
+        }
+
+        const { main, detail } = parseAddress(sighting.address);
+
+        setPostType(
+          sighting.post_type === "LOST" ? "LOST" : "SIGHTING"
+        );
+        setAnimalType(sighting.animal_type);
+        setDescription(sighting.description || "");
+        setLatitude(sighting.latitude.toString());
+        setLongitude(sighting.longitude.toString());
+        setAddress(main || "");
+        setLocationDetail(detail || "");
+        setHasChosenLocation(true);
+
+        setExistingImageUrl(sighting.image_url);
+        setImagePreview(sighting.image_url);
+        setRemoveImage(false);
+      })
+      .catch((err: any) => {
+        console.error("수정 페이지 데이터 요청 실패:", err);
+
+        if (err?.response?.status === 401) {
+          setErrorMessage("로그인이 필요합니다.");
+        } else if (err?.response?.status === 404) {
+          setErrorMessage("글을 찾을 수 없습니다.");
+        } else {
+          setErrorMessage("글 정보를 불러오지 못했습니다.");
+        }
+      })
+      .finally(() => {
+        setAuthLoading(false);
+        setPageLoading(false);
+      });
+  }, [router, sightingId]);
+
+  useEffect(() => {
+    return () => {
+      cleanupPreviewUrl(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const handleUseCurrentLocation = () => {
+    setErrorMessage("");
+
+    if (!navigator.geolocation) {
+      setErrorMessage("이 브라우저에서는 위치 정보를 지원하지 않습니다.");
+      return;
+    }
+
+    setLocationLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        applyPosition(lat, lng);
+        setLocationLoading(false);
+      },
+      (error) => {
+        console.error("현재 위치 가져오기 실패:", error);
+
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setErrorMessage("위치 정보 접근이 거부되었습니다. 브라우저 권한을 확인해주세요.");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setErrorMessage("현재 위치 정보를 가져올 수 없습니다.");
+            break;
+          case error.TIMEOUT:
+            setErrorMessage("위치 정보를 가져오는 데 시간이 너무 오래 걸립니다.");
+            break;
+          default:
+            setErrorMessage("현재 위치를 가져오지 못했습니다.");
+        }
+
+        setLocationLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    cleanupPreviewUrl(imagePreview);
+
+    setImageFile(file);
+    setRemoveImage(false);
+
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+
+    try {
+      const exifData = await exifr.gps(file);
+
+      if (exifData && exifData.latitude && exifData.longitude) {
+        const exifLat = exifData.latitude;
+        const exifLng = exifData.longitude;
+
+        const userLat = parseFloat(latitude);
+        const userLng = parseFloat(longitude);
+
+        const hasValidUserPosition =
+          hasChosenLocation &&
+          !Number.isNaN(userLat) &&
+          !Number.isNaN(userLng);
+
+        if (!hasValidUserPosition) {
+          applyPosition(exifLat, exifLng);
+          setErrorMessage("");
+          return;
+        }
+
+        const distance = getDistanceInMeters(userLat, userLng, exifLat, exifLng);
+
+        if (distance <= 500) {
+          return;
+        }
+
+        const useExif = window.confirm(
+          `사진이 촬영된 위치가 현재 선택한 위치와 약 ${Math.round(distance)}m 떨어져 있습니다.\n\n사진 촬영 위치로 변경하시겠습니까?`
+        );
+
+        if (useExif) {
+          applyPosition(exifLat, exifLng);
+        }
+      }
+    } catch (err) {
+      console.log("📸 EXIF 읽기 실패 (무시 가능):", err);
+    }
+  };
+
+  const handleImageRemove = () => {
+    cleanupPreviewUrl(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+    setRemoveImage(true);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile) return null;
+
+    const formData = new FormData();
+    formData.append("file", imageFile);
+
+    const response = await api.post<{ image_url: string }>(
+      "/upload/image",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data.image_url;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMessage("");
+
+    const token = getAccessToken();
+    if (!token) {
+      setErrorMessage("로그인이 필요합니다.");
+      setLoading(false);
+      return;
+    }
+
+    if (!sightingId) {
+      setErrorMessage("잘못된 접근입니다.");
+      setLoading(false);
+      return;
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      setErrorMessage("지도에서 위치를 선택해주세요.");
+      setLoading(false);
+      return;
+    }
+
+    const fullAddress = locationDetail
+      ? `${address}|||${locationDetail}`
+      : address;
+
+    try {
+      let nextImageUrl = existingImageUrl;
+
+      if (imageFile) {
+        nextImageUrl = await uploadImage();
+      } else if (removeImage) {
+        nextImageUrl = null;
+      }
+
+      await api.patch(`/sightings/${sightingId}`, {
+        animal_type: animalType,
+        description: description || null,
+        image_url: nextImageUrl,
+        latitude: lat,
+        longitude: lng,
+        address: fullAddress || null,
+      });
+
+      alert("글 수정이 완료되었습니다.");
+      router.push("/mypage");
+    } catch (error: any) {
+      console.error("수정 실패:", error);
+
+      if (error?.response?.status === 401) {
+        setErrorMessage("로그인이 만료되었습니다. 다시 로그인해주세요.");
+      } else if (error?.response?.status === 403) {
+        setErrorMessage("본인이 작성한 글만 수정할 수 있습니다.");
+      } else if (error?.response?.status === 404) {
+        setErrorMessage("글을 찾을 수 없습니다.");
+      } else {
+        const detail = error?.response?.data?.detail;
+        setErrorMessage(
+          typeof detail === "string" ? detail : "수정에 실패했습니다."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const parsedLat = parseFloat(latitude);
+  const parsedLng = parseFloat(longitude);
+
+  const mapCenter =
+    !isNaN(parsedLat) && !isNaN(parsedLng)
+      ? { lat: parsedLat, lng: parsedLng }
+      : { lat: 37.5665, lng: 126.978 };
+
+  return (
+    <>
+      <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
+
+      <main className="min-h-[100dvh] bg-gray-50">
+        <Header currentUser={currentUser} authLoading={authLoading} />
+
+        <div className="flex items-center justify-center px-4 py-8">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+            <Link
+              href="/mypage"
+              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-4"
+            >
+              ← 마이페이지로 돌아가기
+            </Link>
+
+            {pageLoading ? (
+              <div className="py-16 text-center text-gray-500">
+                글 정보를 불러오는 중입니다...
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <h1 className="text-2xl font-bold text-gray-900">글 수정</h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    필요한 정보만 수정한 뒤 저장해주세요.
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    글 종류는 수정할 수 없습니다. · 작성일 {latitude && longitude ? "" : ""}
+                  </p>
+                </div>
+
+                <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-sm font-medium text-gray-800">
+                    {isSighting ? "👀 목격 글" : "🔍 실종 글"}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    글 종류는 상태 정책과 연결되어 있어 수정할 수 없습니다.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* 동물 종류 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      동물 종류
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { value: "CAT", emoji: "🐱", label: "고양이" },
+                        { value: "DOG", emoji: "🐶", label: "강아지" },
+                        { value: "OTHER", emoji: "🐾", label: "기타" },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setAnimalType(option.value)}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition ${
+                            animalType === option.value
+                              ? "bg-orange-500 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {option.emoji} {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 설명 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {isSighting ? "특징 설명" : "동물 특징"}
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder={
+                        isSighting
+                          ? "동물의 특징, 상태 등을 입력해주세요"
+                          : "이름, 색상, 크기, 특이사항 등을 자세히 입력해주세요"
+                      }
+                      rows={3}
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none"
+                    />
+                  </div>
+
+                  {/* 사진 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      사진 <span className="text-gray-400">(선택)</span>
+                    </label>
+
+                    {imagePreview ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <img
+                            src={imagePreview}
+                            alt="미리보기"
+                            className="w-full h-48 object-cover rounded-xl border border-gray-200"
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            다른 사진 선택
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleImageRemove}
+                            className="flex-1 rounded-xl bg-red-50 border border-red-200 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            사진 제거
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full h-32 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors"
+                      >
+                        <span className="text-2xl mb-1">📷</span>
+                        <span className="text-sm">사진을 선택해주세요</span>
+                      </button>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {/* 현재 위치 버튼 */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={locationLoading}
+                      className="w-full rounded-xl bg-blue-50 border border-blue-200 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:bg-blue-50 disabled:text-blue-300 transition-colors"
+                    >
+                      {locationLoading
+                        ? "현재 위치 확인 중..."
+                        : isSighting
+                          ? "📍 현재 위치로 재설정"
+                          : "📍 마지막으로 본 위치로 설정"}
+                    </button>
+                  </div>
+
+                  {/* 작은 지도 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {isSighting ? "목격 위치" : "마지막으로 본 위치"}
+                    </label>
+
+                    <div className="rounded-2xl overflow-hidden border border-gray-200 bg-gray-100 relative">
+                      {mapLoading ? (
+                        <div className="h-64 flex items-center justify-center text-sm text-gray-500">
+                          지도 로딩 중...
+                        </div>
+                      ) : (
+                        <>
+                          <KakaoMap
+                            center={mapCenter}
+                            level={3}
+                            style={{ width: "100%", height: "256px" }}
+                            onCreate={(map) => {
+                              mapRef.current = map;
+                            }}
+                            onDragEnd={() => {
+                              setHasChosenLocation(true);
+                            }}
+                            onIdle={(map) => {
+                              updatePositionFromMapCenter(map);
+                            }}
+                          />
+
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                            <div className="flex flex-col items-center">
+                              <span className="text-3xl drop-shadow-lg">📍</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <p className="mt-2 text-xs text-gray-500">
+                      {isSighting
+                        ? "지도를 움직여서 목격 위치를 다시 선택할 수 있습니다."
+                        : "지도를 움직여서 마지막으로 본 위치를 다시 선택할 수 있습니다."}
+                    </p>
+                  </div>
+
+                  {/* 주소 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      주소
+                    </label>
+                    <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+                      {address || "지도에서 위치를 선택하면 자동으로 표시됩니다."}
+                    </div>
+                  </div>
+
+                  {/* 상세 위치 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      상세 위치 <span className="text-gray-400">(선택)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={locationDetail}
+                      onChange={(e) => setLocationDetail(e.target.value)}
+                      placeholder={
+                        isSighting
+                          ? "예: 자판기 옆 벤치, 아파트 정문 앞"
+                          : "예: 산책 중 놓친 장소, 집 앞 골목"
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  {/* 에러 메시지 */}
+                  {errorMessage && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
+                      {errorMessage}
+                    </div>
+                  )}
+
+                  {/* 버튼 영역 */}
+                  <div className="flex gap-3 pt-2">
+                    <Link
+                      href="/mypage"
+                      className="flex-1 text-center rounded-xl border border-gray-300 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      취소
+                    </Link>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className={`flex-1 rounded-xl text-white font-semibold py-3 transition-colors ${
+                        isSighting
+                          ? "bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300"
+                          : "bg-rose-500 hover:bg-rose-600 disabled:bg-rose-300"
+                      }`}
+                    >
+                      {loading ? "수정 저장 중..." : "수정 저장하기"}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}

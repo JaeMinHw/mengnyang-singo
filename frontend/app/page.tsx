@@ -18,6 +18,9 @@ import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
 import MapWithLogic from "@/components/MapWithLogic";
 
+
+
+
 export default function Home() {
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showFound, setShowFound] = useState(false);
+  const [kakaoReady, setKakaoReady] = useState(false);
 
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
 
@@ -57,6 +61,16 @@ export default function Home() {
   useEffect(() => {
     if (window.kakao && window.kakao.maps) {
       setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.kakao &&
+      window.kakao.maps
+    ) {
+      setKakaoReady(true);
     }
   }, []);
 
@@ -167,6 +181,13 @@ export default function Home() {
     }, [detailSighting, sightings]);
   return (
     <>
+      <Script
+        src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`}
+        strategy="afterInteractive"
+        onLoad={() => {
+          window.kakao.maps.load(() => setKakaoReady(true));
+        }}
+      />
       <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
 
       {detailSighting && (
