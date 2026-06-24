@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import health, sighting, auth, upload, comment, notification
+
+from app.api import health, sighting, auth, upload, comment, notification, keyword
 
 
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +30,7 @@ app.include_router(auth.router, tags=["Auth"])
 app.include_router(upload.router, tags=["Upload"])
 app.include_router(comment.router, tags=["Comment"])
 app.include_router(notification.router, tags=["Notification"])
+app.include_router(keyword.router, tags=["Keyword"])
 
 # 업로드 이미지 정적 파일 서빙
 os.makedirs("/app/uploads", exist_ok=True)

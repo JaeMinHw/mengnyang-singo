@@ -6,12 +6,13 @@ import api from "@/lib/api";
 import Header from "@/components/Header";
 import SightingList from "@/components/SightingList";
 import SightingDetailModal from "@/components/SightingDetailModal";
-import type { CurrentUser, Sighting } from "@/types/sighting";
+
 import {
   getRelatedSightings,
   type RelatedSightingResult,
 } from "@/lib/sightingUtils";
-
+import { useRef } from "react";
+import type { CurrentUser, Sighting, KeywordSubscription } from "@/types/sighting";
 export default function MyPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -21,7 +22,9 @@ export default function MyPage() {
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
-
+  const [keywords, setKeywords] = useState<KeywordSubscription[]>([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [keywordLoading, setKeywordLoading] = useState(false);
   useEffect(() => {
     api
       .get<CurrentUser>("/me")
@@ -51,6 +54,13 @@ export default function MyPage() {
       .finally(() => {
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    api
+      .get<KeywordSubscription[]>("/keywords")
+      .then((res) => setKeywords(res.data))
+      .catch((err) => console.error("키워드 조회 실패:", err));
   }, []);
 
   const handleSelect = (sighting: Sighting) => {
@@ -120,6 +130,35 @@ export default function MyPage() {
   const handleRelatedClick = (related: Sighting) => {
     setDetailSighting(related);
     setSelectedSightingId(related.id);
+  };
+
+  const handleAddKeyword = async () => {
+    const trimmed = newKeyword.trim();
+    if (!trimmed) return;
+
+    setKeywordLoading(true);
+    try {
+      const res = await api.post<KeywordSubscription>("/keywords", {
+        keyword: trimmed,
+      });
+      setKeywords((prev) => [res.data, ...prev]);
+      setNewKeyword("");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      alert(typeof detail === "string" ? detail : "키워드 등록에 실패했습니다.");
+    } finally {
+      setKeywordLoading(false);
+    }
+  };
+
+  const handleDeleteKeyword = async (keywordId: number) => {
+    try {
+      await api.delete(`/keywords/${keywordId}`);
+      setKeywords((prev) => prev.filter((k) => k.id !== keywordId));
+    } catch (err) {
+      console.error("키워드 삭제 실패:", err);
+      alert("키워드 삭제에 실패했습니다.");
+    }
   };
 
   return (
@@ -199,6 +238,73 @@ export default function MyPage() {
                 searchQuery=""
               />
             )}
+          </section>
+
+          {/* 관심 키워드 */}
+          <section className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm mt-6">
+            <div className="px-4 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">관심 키워드</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                등록한 키워드와 일치하는 새 글이 올라오면 알림을 받습니다.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                예: &quot;서울&quot; → 서울 전체, &quot;강남&quot; → 강남구 전체, &quot;검정 고양이&quot; → 특징 매칭
+              </p>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* 키워드 입력 */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newKeyword}
+                  onChange={(e) => setNewKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddKeyword();
+                    }
+                  }}
+                  placeholder="키워드 입력 (예: 강남, 검정 고양이)"
+                  className="flex-1 rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                <button
+                  onClick={handleAddKeyword}
+                  disabled={keywordLoading || !newKeyword.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors flex-shrink-0"
+                >
+                  {keywordLoading ? "등록 중..." : "등록"}
+                </button>
+              </div>
+
+              {/* 키워드 목록 */}
+              {keywords.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-6">
+                  등록된 키워드가 없습니다.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {keywords.map((kw) => (
+                    <div
+                      key={kw.id}
+                      className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1.5"
+                    >
+                      <span className="text-sm text-blue-700">{kw.keyword}</span>
+                      <button
+                        onClick={() => handleDeleteKeyword(kw.id)}
+                        className="w-4 h-4 rounded-full bg-blue-200 text-blue-600 flex items-center justify-center hover:bg-blue-300 transition-colors text-xs leading-none"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400">
+                최대 20개까지 등록할 수 있습니다. ({keywords.length}/20)
+              </p>
+            </div>
           </section>
         </div>
       </main>

@@ -56,3 +56,11 @@ export interface Notification {
   is_read: boolean;
   created_at: string;
 }
+
+export interface KeywordSubscription {
+  id: number;
+  user_id: number;
+  keyword: string;
+  is_active: boolean;
+  created_at: string;
+}

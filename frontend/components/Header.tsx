@@ -106,7 +106,7 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
               <img
                 src="/bell.png"
                 alt="알림"
-                className="w-5 h-5"
+                className="w-8 h-8"
               />
 
               {unreadCount > 0 && (

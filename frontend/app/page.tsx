@@ -18,7 +18,7 @@ import SightingDetailModal from "@/components/SightingDetailModal";
 import SightingListPanel from "@/components/SightingListPanel";
 import MapWithLogic from "@/components/MapWithLogic";
 
-
+import { useSearchParams, useRouter } from "next/navigation";
 
 
 export default function Home() {
@@ -38,7 +38,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showFound, setShowFound] = useState(false);
   const [kakaoReady, setKakaoReady] = useState(false);
-
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services,clusterer&autoload=false`;
 
   useEffect(() => {
@@ -73,6 +74,39 @@ export default function Home() {
       setKakaoReady(true);
     }
   }, []);
+
+  // 알림 클릭으로 들어온 경우 해당 글 모달 자동 열기
+  useEffect(() => {
+    const targetId = searchParams.get("sighting_id");
+    if (!targetId || sightings.length === 0) return;
+
+    const id = parseInt(targetId, 10);
+    if (isNaN(id)) return;
+
+    const target = sightings.find((s) => s.id === id);
+
+    if (target) {
+      setSelectedSightingId(target.id);
+      setFocusedSighting({ ...target });
+      setDetailSighting(target);
+    } else {
+      // 메인 목록에 없는 글 (보관됨 등)이면 API로 직접 조회
+      api
+        .get<Sighting>(`/sightings/${id}`)
+        .then((res) => {
+          const fetched = res.data;
+          setSelectedSightingId(fetched.id);
+          setFocusedSighting({ ...fetched });
+          setDetailSighting(fetched);
+        })
+        .catch(() => {
+          console.error("알림 대상 글을 찾을 수 없습니다.");
+        });
+    }
+
+    // URL 파라미터 정리 (뒤로가기 시 모달 재오픈 방지)
+    router.replace("/", { scroll: false });
+  }, [searchParams, sightings]);
 
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);

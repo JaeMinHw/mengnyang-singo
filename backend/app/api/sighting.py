@@ -11,7 +11,8 @@ from app.models.user import User
 from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
 from app.core.notifications import get_comment_participants, create_notifications
 
-
+from app.models.keyword import KeywordSubscription
+from app.models.notification import Notification
 
 router = APIRouter()
 
@@ -60,6 +61,44 @@ def create_sighting(
     db.add(sighting)
     db.commit()
     db.refresh(sighting)
+
+    # 키워드 매칭 알림
+    search_text = " ".join(
+        filter(None, [sighting.address, sighting.description])
+    ).lower()
+
+    if search_text:
+        all_keywords = (
+            db.query(KeywordSubscription)
+            .filter(KeywordSubscription.is_active == True)
+            .all()
+        )
+
+        notified_users: set[int] = set()
+
+        for kw in all_keywords:
+            if kw.user_id == current_user.id:
+                continue
+
+            if kw.user_id in notified_users:
+                continue
+
+            if kw.keyword.lower() in search_text:
+                notification = Notification(
+                    user_id=kw.user_id,
+                    type="KEYWORD_MATCH",
+                    sighting_id=sighting.id,
+                    comment_id=None,
+                    actor_id=current_user.id,
+                    message=f"관심 키워드 '{kw.keyword}'와 일치하는 새 글이 등록되었습니다.",
+                    is_read=False,
+                )
+                db.add(notification)
+                notified_users.add(kw.user_id)
+
+        if notified_users:
+            db.commit()
+
     return sighting_to_response(sighting)
 
 @router.patch("/sightings/{sighting_id}/status", response_model=SightingResponse)

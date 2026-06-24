@@ -29,6 +29,13 @@ from app.models.sighting import Sighting
 from app.models.user import User
 from app.models.comment import Comment
 from app.models.notification import Notification
+
+from app.models.sighting import Sighting
+from app.models.user import User
+from app.models.comment import Comment
+from app.models.notification import Notification
+from app.models.keyword import KeywordSubscription
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
