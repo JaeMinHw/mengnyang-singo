@@ -89,6 +89,23 @@ export const isEdited = (createdAt: string, updatedAt: string): boolean => {
   return Math.abs(updated.getTime() - created.getTime()) > 60_000;
 };
 
+
+export const getArchivedStatus = (
+  resolvedAt: string | null
+): { isArchived: boolean; daysLeft: number | null } => {
+  if (!resolvedAt) return { isArchived: false, daysLeft: null };
+
+  const resolved = parseApiDate(resolvedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - resolved.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  return {
+    isArchived: diffDays >= 30,
+    daysLeft: Math.max(0, 30 - diffDays),
+  };
+};
+
 export const parseAddress = (address: string | null) => {
   if (!address) return { main: null, detail: null };
 

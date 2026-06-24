@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from datetime import datetime, timedelta
 
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.sighting import Sighting
 from app.models.user import User
 from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
+from app.core.notifications import get_comment_participants, create_notifications
 
 
 
@@ -28,6 +30,9 @@ def sighting_to_response(sighting: Sighting) -> dict:
         "address": sighting.address,
         "status": sighting.status,
         "post_type": sighting.post_type,
+        "resolved_at": sighting.resolved_at,
+        "reopen_reason": sighting.reopen_reason,
+        "reopen_detail": sighting.reopen_detail,
         "created_at": sighting.created_at,
         "updated_at": sighting.updated_at,
     }
@@ -90,9 +95,66 @@ def update_sighting_status(
             detail="목격 글은 목격, 보호 중, 찾음 상태로만 변경할 수 있습니다",
         )
 
-    sighting.status = data.status
+    previous_status = sighting.status
+    next_status = data.status
+
+    # FOUND → 활성 상태로 되돌릴 때는 사유 필수
+    if previous_status == "FOUND" and next_status != "FOUND":
+        if not data.reopen_reason:
+            raise HTTPException(
+                status_code=400,
+                detail="찾음 상태를 되돌릴 때는 사유를 선택해야 합니다",
+            )
+
+        if data.reopen_reason == "OTHER":
+            if not data.reopen_detail or not data.reopen_detail.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="기타 사유를 선택한 경우 상세 내용을 입력해야 합니다",
+                )
+
+    sighting.status = next_status
+
+    # 활성 상태 → FOUND
+    if previous_status != "FOUND" and next_status == "FOUND":
+        sighting.resolved_at = datetime.utcnow()
+        sighting.reopen_reason = None
+        sighting.reopen_detail = None
+
+    # FOUND → 활성 상태
+    elif previous_status == "FOUND" and next_status != "FOUND":
+        sighting.resolved_at = None
+        sighting.reopen_reason = data.reopen_reason
+        sighting.reopen_detail = (
+            data.reopen_detail.strip()
+            if data.reopen_reason == "OTHER" and data.reopen_detail
+            else None
+        )
+
     db.commit()
     db.refresh(sighting)
+
+    # 상태 변경 알림: 댓글 참여자들에게 (글 작성자 본인은 제외)
+    status_label = {
+        "SPOTTED": "목격",
+        "LOST": "실종",
+        "PROTECTING": "보호 중",
+        "FOUND": "찾음",
+    }.get(next_status, next_status)
+
+    participant_recipients = get_comment_participants(db, sighting.id)
+    create_notifications(
+        db=db,
+        recipients=participant_recipients,
+        exclude_user_id=current_user.id,
+        notification_type="STATUS_CHANGED",
+        sighting_id=sighting.id,
+        comment_id=None,
+        actor_id=current_user.id,
+        message=f"참여한 글의 상태가 '{status_label}'(으)로 변경되었습니다.",
+    )
+
+    db.commit()
 
     return sighting_to_response(sighting)
 
@@ -151,6 +213,16 @@ def get_sightings(
 ):
     query = db.query(Sighting)
     query = query.filter(Sighting.is_deleted == False)
+
+    # 메인 공개 목록에서는 resolved_at 기준 30일 지난 FOUND 글 숨김
+    found_hide_threshold = datetime.utcnow() - timedelta(days=30)
+    query = query.filter(
+        or_(
+            Sighting.status != "FOUND",
+            Sighting.resolved_at.is_(None),
+            Sighting.resolved_at >= found_hide_threshold,
+        )
+    )
 
     if animal_type:
         query = query.filter(Sighting.animal_type == animal_type)

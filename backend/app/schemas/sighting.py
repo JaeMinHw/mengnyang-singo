@@ -25,6 +25,9 @@ class SightingResponse(BaseModel):
     address: Optional[str]
     status: str
     post_type: str
+    resolved_at: Optional[datetime] = None
+    reopen_reason: Optional[str] = None
+    reopen_detail: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -39,6 +42,10 @@ class HealthResponse(BaseModel):
 
 class SightingStatusUpdate(BaseModel):
     status: Literal["SPOTTED", "LOST", "PROTECTING", "FOUND"]
+    reopen_reason: Optional[
+        Literal["WRONG_ANIMAL", "NOT_FOUND_YET", "MISTAKE", "OTHER"]
+    ] = None
+    reopen_detail: Optional[str] = None
 
 
 class SightingUpdate(BaseModel):

@@ -28,7 +28,14 @@ interface SightingDetailModalProps {
   relatedSightings: RelatedSightingResult[];
   onClose: () => void;
   onImageClick: (imageUrl: string) => void;
-  onStatusChange: (sightingId: number, newStatus: string) => void;
+  onStatusChange: (
+    sightingId: number,
+    newStatus: string,
+    extra?: {
+      reopen_reason?: string;
+      reopen_detail?: string;
+    }
+  ) => void;
   onDelete: (sightingId: number) => void;
   onRelatedClick: (sighting: Sighting) => void;
 }
@@ -55,6 +62,12 @@ export default function SightingDetailModal({
 
   const { main, detail } = parseAddress(sighting.address);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [reopenReason, setReopenReason] = useState<
+    "WRONG_ANIMAL" | "NOT_FOUND_YET" | "MISTAKE" | "OTHER" | null
+  >(null);
+  const [reopenDetail, setReopenDetail] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -130,6 +143,16 @@ export default function SightingDetailModal({
   const allowedStatuses = ALLOWED_STATUSES_BY_POST_TYPE[sighting.post_type] || ALLOWED_STATUSES_BY_POST_TYPE["SIGHTING"];
 
   const handleStatusChange = async (newStatus: string) => {
+  // FOUND에서 다른 상태로 되돌리는 경우 → 사유 폼 먼저
+    if (sighting.status === "FOUND" && newStatus !== "FOUND") {
+      setPendingStatus(newStatus);
+      setShowReopenForm(true);
+      setReopenReason(null);
+      setReopenDetail("");
+      return;
+    }
+
+    // 그 외: 바로 API 호출
     if (statusLoading) return;
     setStatusLoading(true);
     try {
@@ -137,6 +160,39 @@ export default function SightingDetailModal({
     } finally {
       setStatusLoading(false);
     }
+  };
+
+  const handleReopenConfirm = async () => {
+    if (!pendingStatus || !reopenReason) return;
+
+    if (reopenReason === "OTHER" && !reopenDetail.trim()) {
+      alert("기타 사유를 입력해주세요.");
+      return;
+    }
+
+    if (statusLoading) return;
+    setStatusLoading(true);
+
+    try {
+      await onStatusChange(sighting.id, pendingStatus, {
+        reopen_reason: reopenReason,
+        reopen_detail: reopenReason === "OTHER" ? reopenDetail.trim() : undefined,
+      });
+
+      setShowReopenForm(false);
+      setPendingStatus(null);
+      setReopenReason(null);
+      setReopenDetail("");
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleReopenCancel = () => {
+    setShowReopenForm(false);
+    setPendingStatus(null);
+    setReopenReason(null);
+    setReopenDetail("");
   };
 
   const handleCommentImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,25 +496,95 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
           </div>
 
           {/* 작성자 전용: 상태 변경 */}
+
           {isOwner && (
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-medium text-gray-500 mb-2">상태 변경</p>
-              <div className="flex gap-2 flex-wrap">
-                {allowedStatuses
-                  .filter((s) => s !== sighting.status)
-                  .map((s) => (
+
+              {showReopenForm ? (
+                /* 되돌리기 사유 폼 */
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+                  <p className="text-xs font-semibold text-amber-800">
+                    ⚠️ 찾음 상태를 되돌리는 이유를 선택해주세요
+                  </p>
+
+                  <div className="space-y-2">
+                    {[
+                      { value: "WRONG_ANIMAL", label: "다른 동물이었습니다" },
+                      { value: "NOT_FOUND_YET", label: "아직 찾지 못했습니다" },
+                      { value: "MISTAKE", label: "실수로 상태를 변경했습니다" },
+                      { value: "OTHER", label: "기타" },
+                    ].map((option) => (
+                      <label
+                        key={option.value}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="reopen_reason"
+                          value={option.value}
+                          checked={reopenReason === option.value}
+                          onChange={() =>
+                            setReopenReason(
+                              option.value as typeof reopenReason
+                            )
+                          }
+                          className="accent-amber-500"
+                        />
+                        <span className="text-sm text-gray-700">{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {reopenReason === "OTHER" && (
+                    <textarea
+                      value={reopenDetail}
+                      onChange={(e) => setReopenDetail(e.target.value)}
+                      placeholder="사유를 직접 입력해주세요"
+                      rows={2}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-100 resize-none"
+                    />
+                  )}
+
+                  <div className="flex gap-2">
                     <button
-                      key={s}
-                      onClick={() => handleStatusChange(s)}
-                      disabled={statusLoading}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition
-                        ${statusConfig[s]?.color || "bg-gray-100 text-gray-700"}
-                        border-transparent hover:opacity-80 disabled:opacity-50`}
+                      onClick={handleReopenCancel}
+                      className="flex-1 py-2 rounded-lg text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
                     >
-                      {statusLoading ? "변경 중..." : `→ ${statusConfig[s]?.label}`}
+                      취소
                     </button>
-                  ))}
-              </div>
+                    <button
+                      onClick={handleReopenConfirm}
+                      disabled={
+                        statusLoading ||
+                        !reopenReason ||
+                        (reopenReason === "OTHER" && !reopenDetail.trim())
+                      }
+                      className="flex-1 py-2 rounded-lg text-xs font-medium text-white bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
+                    >
+                      {statusLoading ? "변경 중..." : "확인"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* 일반 상태 변경 버튼 */
+                <div className="flex gap-2 flex-wrap">
+                  {allowedStatuses
+                    .filter((s) => s !== sighting.status)
+                    .map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleStatusChange(s)}
+                        disabled={statusLoading}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition
+                          ${statusConfig[s]?.color || "bg-gray-100 text-gray-700"}
+                          border-transparent hover:opacity-80 disabled:opacity-50`}
+                      >
+                        {statusLoading ? "변경 중..." : `→ ${statusConfig[s]?.label}`}
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -797,6 +923,46 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
                 </div>
               )}
             </div>
+
+            {/* 기록 정보 */}
+
+            {(sighting.resolved_at || sighting.reopen_reason) && (
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <p className="text-xs font-medium text-gray-500">기록 정보</p>
+
+                {sighting.resolved_at && (
+                  <div className="bg-green-50 rounded-xl p-3">
+                    <p className="text-xs text-green-700">
+                      ✅ 찾음 처리: {formatDate(sighting.resolved_at)}
+                    </p>
+                  </div>
+                )}
+
+                {sighting.reopen_reason && (
+                  <div className="bg-amber-50 rounded-xl p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-amber-700">
+                      ⚠️ 이전에 찾음 상태를 되돌린 이력이 있습니다
+                    </p>
+                    <p className="text-xs text-amber-600">
+                      사유:{" "}
+                      {
+                        {
+                          WRONG_ANIMAL: "다른 동물이었습니다",
+                          NOT_FOUND_YET: "아직 찾지 못했습니다",
+                          MISTAKE: "실수로 상태를 변경했습니다",
+                          OTHER: "기타",
+                        }[sighting.reopen_reason] ?? sighting.reopen_reason
+                      }
+                    </p>
+                    {sighting.reopen_detail && (
+                      <p className="text-xs text-amber-500">
+                        └ {sighting.reopen_detail}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           {/* 신고 번호 + 작성자 */}
           <div className="border-t border-gray-100 pt-3 space-y-2">
             <p className="text-xs text-gray-400">신고 번호: #{sighting.id}</p>

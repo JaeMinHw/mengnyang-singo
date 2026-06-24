@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { removeAccessToken } from "@/lib/auth";
+import { useEffect, useState } from "react";
 
+import api from "@/lib/api";
+import { removeAccessToken } from "@/lib/auth";
+import Image from "next/image";
 interface CurrentUser {
   id: number;
   email: string;
@@ -21,9 +24,49 @@ interface HeaderProps {
 
 export default function Header({ currentUser, authLoading }: HeaderProps) {
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    if (!currentUser) {
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await api.get<{ count: number }>("/notifications/unread-count");
+      setUnreadCount(response.data.count);
+    } catch (err) {
+      console.error("안읽은 알림 개수 조회 실패:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadCount(0);
+      return;
+    }
+
+    fetchUnreadCount();
+
+    const interval = window.setInterval(() => {
+      fetchUnreadCount();
+    }, 30000);
+
+    const handleFocus = () => {
+      fetchUnreadCount();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [currentUser]);
 
   const handleLogout = () => {
     removeAccessToken();
+    setUnreadCount(0);
     router.push("/");
     window.location.reload();
   };
@@ -51,6 +94,27 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
                 </span>
                 <span className="hidden sm:inline">목격 및 실종 등록하기</span>
               </span>
+            </Link>
+
+            <Link
+              href="/notifications"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="알림"
+              title="알림"
+            >
+              <div className="relative">
+              <img
+                src="/bell.png"
+                alt="알림"
+                className="w-5 h-5"
+              />
+
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-semibold flex items-center justify-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </div>
             </Link>
 
             <Link

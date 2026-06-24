@@ -7,6 +7,7 @@ import {
   parseAddress,
   getHighlightParts,
   isEdited,
+  getArchivedStatus,
 } from "@/lib/sightingUtils";
 
 interface SightingListProps {
@@ -138,6 +139,18 @@ export default function SightingList({
                   )}
                   {sighting.user_nickname && ` · ${sighting.user_nickname}`}
                 </p>
+                {(() => {
+                  const { isArchived, daysLeft } = getArchivedStatus(sighting.resolved_at ?? null);
+                  if (!sighting.resolved_at) return null;
+
+                  return (
+                    <p className={`text-xs mt-0.5 ${isArchived ? "text-gray-400" : "text-green-600"}`}>
+                      {isArchived
+                        ? "📦 메인 목록에서 보관됨"
+                        : `✅ 찾음 · 메인 목록에서 ${daysLeft}일 후 보관`}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
           </li>

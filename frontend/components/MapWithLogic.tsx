@@ -41,7 +41,7 @@ export default function MapWithLogic({
   const focusMarkerWithOffset = (position: kakao.maps.LatLng, hasImage: boolean = false) => {
     if (!map) return;
 
-    map.setLevel(3);
+    map.setLevel(4);
     map.setCenter(position);
 
     let panOffsetY: number;

@@ -134,10 +134,18 @@ export default function Home() {
     setSelectedSightingId(sighting.id);
   };
 
-  const handleStatusChange = async (sightingId: number, newStatus: string) => {
+  const handleStatusChange = async (
+    sightingId: number,
+    newStatus: string,
+    extra?: {
+      reopen_reason?: string;
+      reopen_detail?: string;
+    }
+  ) => {
     try {
       const response = await api.patch<Sighting>(`/sightings/${sightingId}/status`, {
         status: newStatus,
+        ...extra,
       });
 
       const updated = response.data;

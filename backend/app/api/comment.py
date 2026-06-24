@@ -4,6 +4,8 @@ from typing import List
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.notifications import get_comment_participants, create_notifications
+
 from app.models.comment import Comment
 from app.models.sighting import Sighting
 from app.models.user import User
@@ -66,6 +68,36 @@ def create_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+
+    actor_name = current_user.nickname or "어떤 사용자"
+
+    # 1. 글 작성자 알림
+    owner_recipients = {sighting.user_id}
+    create_notifications(
+        db=db,
+        recipients=owner_recipients,
+        exclude_user_id=current_user.id,
+        notification_type="NEW_COMMENT",
+        sighting_id=sighting.id,
+        comment_id=comment.id,
+        actor_id=current_user.id,
+        message=f"{actor_name}님이 회원님의 글에 댓글을 남겼습니다.",
+    )
+
+    # 2. 댓글 참여자 알림 (글 작성자는 제외해서 중복 방지)
+    participant_recipients = get_comment_participants(db, sighting.id) - {sighting.user_id}
+    create_notifications(
+        db=db,
+        recipients=participant_recipients,
+        exclude_user_id=current_user.id,
+        notification_type="NEW_COMMENT",
+        sighting_id=sighting.id,
+        comment_id=comment.id,
+        actor_id=current_user.id,
+        message=f"{actor_name}님이 댓글을 단 글에 새 댓글을 남겼습니다.",
+    )
+
+    db.commit()
 
     return comment_to_response(comment)
 

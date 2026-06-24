@@ -10,6 +10,9 @@ export interface Sighting {
   address: string | null;
   status: string;
   post_type: string;
+  resolved_at: string | null;
+  reopen_reason: string | null;
+  reopen_detail: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,4 +41,18 @@ export interface Comment {
   image_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: string;
+  sighting_id: number | null;
+  comment_id: number | null;
+  actor_id: number | null;
+  actor_nickname: string | null;
+  message: string;
+  is_read: boolean;
+  created_at: string;
 }

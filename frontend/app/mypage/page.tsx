@@ -58,10 +58,18 @@ export default function MyPage() {
     setDetailSighting(sighting);
   };
 
-  const handleStatusChange = async (sightingId: number, newStatus: string) => {
+  const handleStatusChange = async (
+    sightingId: number,
+    newStatus: string,
+    extra?: {
+      reopen_reason?: string;
+      reopen_detail?: string;
+    }
+  ) => {
     try {
       const response = await api.patch<Sighting>(`/sightings/${sightingId}/status`, {
         status: newStatus,
+        ...extra,
       });
 
       const updated = response.data;
