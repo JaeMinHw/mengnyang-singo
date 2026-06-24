@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.core.database import Base
 from app.models.sighting import Sighting
 from app.models.user import User
-
+from app.models.comment import Comment
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

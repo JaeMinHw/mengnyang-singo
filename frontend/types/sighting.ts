@@ -28,3 +28,14 @@ export interface CurrentUser {
   created_at: string;
   updated_at: string;
 }
+
+export interface Comment {
+  id: number;
+  sighting_id: number;
+  user_id: number;
+  user_nickname: string | null;
+  content: string | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+}

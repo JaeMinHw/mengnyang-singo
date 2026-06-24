@@ -182,13 +182,15 @@ export default function Home() {
   return (
     <>
       <Script
-        src={`//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`}
+        src={KAKAO_SDK_URL}
         strategy="afterInteractive"
         onLoad={() => {
-          window.kakao.maps.load(() => setKakaoReady(true));
+          window.kakao.maps.load(() => {
+            setLoading(false);
+            setKakaoReady(true);
+          });
         }}
       />
-      <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
 
       {detailSighting && (
         <SightingDetailModal

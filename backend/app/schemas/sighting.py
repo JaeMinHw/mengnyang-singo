@@ -39,3 +39,12 @@ class HealthResponse(BaseModel):
 
 class SightingStatusUpdate(BaseModel):
     status: Literal["SPOTTED", "LOST", "PROTECTING", "FOUND"]
+
+
+class SightingUpdate(BaseModel):
+    animal_type: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    address: Optional[str] = None

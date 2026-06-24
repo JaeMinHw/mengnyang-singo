@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Map as KakaoMap, MapMarker } from "react-kakao-maps-sdk";
-
+import type { Comment } from "@/types/sighting";
+import api from "@/lib/api";
 import type { Sighting } from "@/types/sighting";
 import {
   animalConfig,
@@ -57,7 +58,18 @@ export default function SightingDetailModal({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [commentImageFile, setCommentImageFile] = useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const commentFileRef = useRef<HTMLInputElement>(null);
 
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [editingImageFile, setEditingImageFile] = useState<File | null>(null);
+  const [editingImagePreview, setEditingImagePreview] = useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const editFileRef = useRef<HTMLInputElement>(null);
   // 글이 바뀌면 스크롤 맨 위로 + 전환 효과
   useEffect(() => {
     if (scrollRef.current) {
@@ -94,12 +106,25 @@ export default function SightingDetailModal({
     }
   }, []);
 
+  useEffect(() => {
+    if (!sighting.id) return;
+
+    setCommentsLoading(true);
+
+    api
+      .get<Comment[]>(`/sightings/${sighting.id}/comments`)
+      .then((res) => setComments(res.data))
+      .catch((err) => console.error("댓글 로딩 실패:", err))
+      .finally(() => setCommentsLoading(false));
+  }, [sighting.id]);
+
   const statusInfo = statusConfig[sighting.status] || {
     label: sighting.status,
     color: "bg-gray-100 text-gray-700",
     bgColor: "bg-gray-500",
   };
-
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const isOwner = currentUserId !== null && currentUserId === sighting.user_id;
 
   const allowedStatuses = ALLOWED_STATUSES_BY_POST_TYPE[sighting.post_type] || ALLOWED_STATUSES_BY_POST_TYPE["SIGHTING"];
@@ -111,6 +136,190 @@ export default function SightingDetailModal({
       await onStatusChange(sighting.id, newStatus);
     } finally {
       setStatusLoading(false);
+    }
+  };
+
+  const handleCommentImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (commentImagePreview) {
+    URL.revokeObjectURL(commentImagePreview);
+  }
+
+  setCommentImageFile(file);
+  setCommentImagePreview(URL.createObjectURL(file));
+};
+
+const handleCommentImageRemove = () => {
+  if (commentImagePreview) {
+    URL.revokeObjectURL(commentImagePreview);
+  }
+  setCommentImageFile(null);
+  setCommentImagePreview(null);
+  if (commentFileRef.current) {
+    commentFileRef.current.value = "";
+  }
+};
+
+const handleCommentSubmit = async () => {
+  const hasText = newComment.trim().length > 0;
+  const hasImage = commentImageFile !== null;
+
+  if (!hasText && !hasImage) return;
+
+  setCommentSubmitting(true);
+
+  try {
+    let uploadedImageUrl: string | null = null;
+
+    if (commentImageFile) {
+      const formData = new FormData();
+      formData.append("file", commentImageFile);
+
+      const uploadRes = await api.post<{ image_url: string }>(
+        "/upload/image",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      uploadedImageUrl = uploadRes.data.image_url;
+    }
+
+    const res = await api.post<Comment>(`/sightings/${sighting.id}/comments`, {
+      content: hasText ? newComment.trim() : null,
+      image_url: uploadedImageUrl,
+    });
+
+    setComments((prev) => [res.data, ...prev]);
+
+    setNewComment("");
+    handleCommentImageRemove();
+  } catch (err: any) {
+    console.error("댓글 작성 실패:", err);
+
+    if (err?.response?.status === 401) {
+      alert("로그인이 필요합니다.");
+    } else {
+      alert("댓글 작성에 실패했습니다.");
+    }
+  } finally {
+    setCommentSubmitting(false);
+  }
+};
+
+const handleEditStart = (comment: Comment) => {
+  setEditingCommentId(comment.id);
+  setEditingContent(comment.content || "");
+  setEditingImagePreview(comment.image_url);
+  setEditingImageFile(null);
+};
+
+const handleEditCancel = () => {
+  if (editingImagePreview && editingImagePreview.startsWith("blob:")) {
+    URL.revokeObjectURL(editingImagePreview);
+  }
+  setEditingCommentId(null);
+  setEditingContent("");
+  setEditingImageFile(null);
+  setEditingImagePreview(null);
+  if (editFileRef.current) {
+    editFileRef.current.value = "";
+  }
+};
+
+const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (editingImagePreview && editingImagePreview.startsWith("blob:")) {
+    URL.revokeObjectURL(editingImagePreview);
+  }
+
+  setEditingImageFile(file);
+  setEditingImagePreview(URL.createObjectURL(file));
+};
+
+const handleEditImageRemove = () => {
+  if (editingImagePreview && editingImagePreview.startsWith("blob:")) {
+    URL.revokeObjectURL(editingImagePreview);
+  }
+  setEditingImageFile(null);
+  setEditingImagePreview(null);
+  if (editFileRef.current) {
+    editFileRef.current.value = "";
+  }
+};
+
+const handleEditSubmit = async (commentId: number, existingImageUrl: string | null) => {
+  const hasText = editingContent.trim().length > 0;
+  const hasNewImage = editingImageFile !== null;
+  const hasExistingImage = editingImagePreview !== null && !editingImagePreview.startsWith("blob:");
+  const hasImage = hasNewImage || hasExistingImage;
+
+  if (!hasText && !hasImage) {
+    alert("댓글 내용 또는 이미지를 입력해주세요.");
+    return;
+  }
+
+  setEditSubmitting(true);
+
+  try {
+    let nextImageUrl = hasExistingImage ? existingImageUrl : null;
+
+    if (hasNewImage && editingImageFile) {
+      const formData = new FormData();
+      formData.append("file", editingImageFile);
+
+      const uploadRes = await api.post<{ image_url: string }>(
+        "/upload/image",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      nextImageUrl = uploadRes.data.image_url;
+    } else if (!hasExistingImage) {
+      nextImageUrl = null;
+    }
+
+    const res = await api.patch<Comment>(`/comments/${commentId}`, {
+      content: hasText ? editingContent.trim() : null,
+      image_url: nextImageUrl,
+    });
+
+    setComments((prev) =>
+      prev.map((c) => (c.id === commentId ? res.data : c))
+    );
+
+    handleEditCancel();
+  } catch (err: any) {
+    console.error("댓글 수정 실패:", err);
+
+    if (err?.response?.status === 403) {
+      alert("본인이 작성한 댓글만 수정할 수 있습니다.");
+    } else {
+      alert("댓글 수정에 실패했습니다.");
+    }
+  } finally {
+    setEditSubmitting(false);
+  }
+};
+
+  const handleCommentDelete = async (commentId: number) => {
+    if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
+
+    try {
+      await api.delete(`/comments/${commentId}`);
+
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch (err: any) {
+      console.error("댓글 삭제 실패:", err);
+
+      if (err?.response?.status === 403) {
+        alert("본인이 작성한 댓글만 삭제할 수 있습니다.");
+      } else {
+        alert("댓글 삭제에 실패했습니다.");
+      }
     }
   };
 
@@ -378,6 +587,216 @@ export default function SightingDetailModal({
               </div>
             </div>
           )}
+
+          {/* 댓글 섹션 */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-semibold text-gray-800 mb-3">
+                댓글 {comments.length > 0 && (
+                  <span className="text-gray-400 font-normal">({comments.length})</span>
+                )}
+              </p>
+
+              {/* 댓글 작성 폼 */}
+                {currentUserId && (
+                  <div className="bg-gray-50 rounded-xl p-3 mb-3 space-y-2">
+                    <textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="댓글을 입력해주세요"
+                      rows={2}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 resize-none"
+                    />
+
+                    {commentImagePreview ? (
+                      <div className="relative">
+                        <img
+                          src={commentImagePreview}
+                          alt="댓글 이미지 미리보기"
+                          className="w-full max-h-36 object-cover rounded-lg border border-gray-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCommentImageRemove}
+                          className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => commentFileRef.current?.click()}
+                        className="text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+                      >
+                        📷 사진 첨부
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCommentSubmit}
+                        disabled={
+                          commentSubmitting ||
+                          (!newComment.trim() && !commentImageFile)
+                        }
+                        className="px-4 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
+                      >
+                        {commentSubmitting ? "등록 중..." : "등록"}
+                      </button>
+                    </div>
+
+                    <input
+                      ref={commentFileRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCommentImageSelect}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
+              {commentsLoading ? (
+                <div className="text-sm text-gray-400 text-center py-4">
+                  댓글을 불러오는 중입니다...
+                </div>
+              ) : comments.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-4">
+                  아직 댓글이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {comments.map((comment) => {
+                    const isCommentOwner = currentUserId !== null && currentUserId === comment.user_id;
+                    const isEditing = editingCommentId === comment.id;
+
+                    return (
+                      <div
+                        key={comment.id}
+                        className="bg-gray-50 rounded-xl p-3"
+                      >
+                        {/* 작성자 + 시간 + 수정/삭제 */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-700">
+                            {comment.user_nickname || "익명"}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">
+                              {formatDate(comment.created_at)}
+                              {isEdited(comment.created_at, comment.updated_at) && (
+                                <span className="ml-1">(수정됨)</span>
+                              )}
+                            </span>
+                            {isCommentOwner && !isEditing && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleEditStart(comment)}
+                                  className="text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleCommentDelete(comment.id)}
+                                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {isEditing ? (
+                          /* 수정 모드 */
+                          <div className="space-y-2">
+                            <textarea
+                              value={editingContent}
+                              onChange={(e) => setEditingContent(e.target.value)}
+                              rows={2}
+                              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-black outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 resize-none"
+                            />
+
+                            {editingImagePreview ? (
+                              <div className="relative">
+                                <img
+                                  src={editingImagePreview}
+                                  alt="수정 이미지 미리보기"
+                                  className="w-full max-h-36 object-cover rounded-lg border border-gray-200"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleEditImageRemove}
+                                  className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : null}
+
+                            <div className="flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => editFileRef.current?.click()}
+                                className="text-xs text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
+                              >
+                                📷 사진 변경
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleEditCancel}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditSubmit(comment.id, comment.image_url)}
+                                  disabled={
+                                    editSubmitting ||
+                                    (!editingContent.trim() && !editingImagePreview)
+                                  }
+                                  className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
+                                >
+                                  {editSubmitting ? "저장 중..." : "저장"}
+                                </button>
+                              </div>
+                            </div>
+
+                            <input
+                              ref={editFileRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditImageSelect}
+                              className="hidden"
+                            />
+                          </div>
+                        ) : (
+                          /* 일반 모드 */
+                          <>
+                            {comment.image_url && (
+                              <img
+                                src={comment.image_url}
+                                alt="댓글 이미지"
+                                className="w-full max-h-48 object-cover rounded-lg mb-2 cursor-pointer"
+                                onClick={() => onImageClick(comment.image_url!)}
+                              />
+                            )}
+
+                            {comment.content && (
+                              <p className="text-sm text-gray-700 leading-relaxed">
+                                {comment.content}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           {/* 신고 번호 + 작성자 */}
           <div className="border-t border-gray-100 pt-3 space-y-2">
             <p className="text-xs text-gray-400">신고 번호: #{sighting.id}</p>

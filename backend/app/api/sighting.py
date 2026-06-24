@@ -7,7 +7,8 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.sighting import Sighting
 from app.models.user import User
-from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate
+from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
+
 
 
 router = APIRouter()
@@ -95,6 +96,34 @@ def update_sighting_status(
 
     return sighting_to_response(sighting)
 
+
+@router.patch("/sightings/{sighting_id}", response_model=SightingResponse)
+def update_sighting(
+    sighting_id: int,
+    data: SightingUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sighting = db.query(Sighting).filter(
+        Sighting.id == sighting_id,
+        Sighting.is_deleted == False,
+    ).first()
+
+    if not sighting:
+        raise HTTPException(status_code=404, detail="글을 찾을 수 없습니다")
+
+    if sighting.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인이 작성한 글만 수정할 수 있습니다")
+
+    update_data = data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(sighting, field, value)
+
+    db.commit()
+    db.refresh(sighting)
+
+    return sighting_to_response(sighting)
 
 
 @router.get("/my-sightings", response_model=List[SightingResponse])

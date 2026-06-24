@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import health, sighting, auth, upload
+from app.api import health, sighting, auth, upload, comment
+
 
 from fastapi.staticfiles import StaticFiles
 import os
@@ -24,8 +25,9 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(sighting.router, tags=["Sighting"])
-app.include_router(auth.router, tags=["Auth"])  # 방금 만든 라우터 연결!
+app.include_router(auth.router, tags=["Auth"])
 app.include_router(upload.router, tags=["Upload"])
+app.include_router(comment.router, tags=["Comment"])
 
 # 업로드 이미지 정적 파일 서빙
 os.makedirs("/app/uploads", exist_ok=True)
