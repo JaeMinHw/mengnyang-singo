@@ -5,6 +5,7 @@ export interface Sighting {
   animal_type: string;
   description: string | null;
   image_url: string | null;
+  image_urls: string[];         // ← 추가
   latitude: number;
   longitude: number;
   address: string | null;

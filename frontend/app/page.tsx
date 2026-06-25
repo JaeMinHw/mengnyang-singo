@@ -241,7 +241,7 @@ export default function Home() {
           relatedSightings={relatedSightings}
           onClose={() => setDetailSighting(null)}
           onImageClick={(url) => {
-            setDetailSighting(null);
+
             setFullImageUrl(url);
           }}
           onStatusChange={handleStatusChange}

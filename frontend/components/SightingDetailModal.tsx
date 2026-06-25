@@ -60,9 +60,25 @@ export default function SightingDetailModal({
   const router = useRouter();
   const [kakaoReady, setKakaoReady] = useState(false);
 
-  const { main, detail } = parseAddress(sighting.address);
+
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  // image_urls 우선, 없으면 image_url 폴백
+
+
+
+
   const [statusLoading, setStatusLoading] = useState(false);
   const [showReopenForm, setShowReopenForm] = useState(false);
+  const { main, detail } = parseAddress(sighting.address);
+
+  const imageUrls: string[] =
+  sighting.image_urls && sighting.image_urls.length > 0
+    ? sighting.image_urls
+    : sighting.image_url
+    ? [sighting.image_url]
+    : [];
+
+    
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [reopenReason, setReopenReason] = useState<
     "WRONG_ANIMAL" | "NOT_FOUND_YET" | "MISTAKE" | "OTHER" | null
@@ -83,12 +99,22 @@ export default function SightingDetailModal({
   const [editingImagePreview, setEditingImagePreview] = useState<string | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const editFileRef = useRef<HTMLInputElement>(null);
+
+  const activeImageUrl = imageUrls[activeImageIndex] ?? null;
+  console.log("detail image debug", {
+    image_url: sighting.image_url,
+    image_urls: sighting.image_urls,
+    imageUrls,
+    activeImageIndex,
+    activeImageUrl,
+  });
   // 글이 바뀌면 스크롤 맨 위로 + 전환 효과
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
 
+    setActiveImageIndex(0); // ← 추가
     setIsTransitioning(true);
     const timer = setTimeout(() => setIsTransitioning(false), 300);
 
@@ -391,13 +417,40 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {sighting.image_url ? (
-          <img
-            src={sighting.image_url}
-            alt="신고 이미지"
-            className="w-full h-56 object-cover rounded-t-2xl cursor-pointer"
-            onClick={() => onImageClick(sighting.image_url!)}
-          />
+          {imageUrls.length > 0 ? (
+          <div>
+            {/* 대표 이미지 */}
+            <img
+              src={activeImageUrl!}
+              alt="신고 이미지"
+              className="w-full h-56 object-cover rounded-t-2xl cursor-pointer"
+              onClick={() => onImageClick(activeImageUrl!)}
+            />
+
+            {/* 썸네일 목록 - 2장 이상일 때만 표시 */}
+            {imageUrls.length > 1 && (
+              <div className="flex gap-2 px-3 py-2 bg-gray-50 overflow-x-auto">
+                {imageUrls.map((url, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setActiveImageIndex(index)}
+                    className={`flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
+                      index === activeImageIndex
+                        ? "border-blue-500"
+                        : "border-transparent hover:border-gray-300"
+                    }`}
+                  >
+                    <img
+                      src={url}
+                      alt={`이미지 ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="w-full h-32 bg-gray-100 rounded-t-2xl flex items-center justify-center text-gray-400 text-4xl">
             {animalConfig[sighting.animal_type]?.emoji || "🐾"}
