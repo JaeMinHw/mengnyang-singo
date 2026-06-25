@@ -1,12 +1,13 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 
 class SightingCreate(BaseModel):
     animal_type: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
     latitude: float
     longitude: float
     address: Optional[str] = None
@@ -20,6 +21,7 @@ class SightingResponse(BaseModel):
     animal_type: str
     description: Optional[str]
     image_url: Optional[str]
+    image_urls: List[str] = Field(default_factory=list)
     latitude: float
     longitude: float
     address: Optional[str]
@@ -52,6 +54,7 @@ class SightingUpdate(BaseModel):
     animal_type: Optional[str] = None
     description: Optional[str] = None
     image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     address: Optional[str] = None

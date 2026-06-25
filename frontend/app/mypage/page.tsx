@@ -245,7 +245,7 @@ export default function MyPage() {
             <div className="px-4 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">관심 키워드</h2>
               <p className="text-sm text-gray-500 mt-1">
-                등록한 키워드와 일치하는 새 글이 올라오면 알림을 받습니다.
+                등록한 키워드와 일치하는 새 글이 올라오면 알림을 받습니다. 자세하게 나눠서 등록하시면 많은 알림을 받게 됩니다.
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 예: &quot;서울&quot; → 서울 전체, &quot;강남&quot; → 강남구 전체, &quot;검정 고양이&quot; → 특징 매칭

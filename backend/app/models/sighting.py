@@ -24,5 +24,12 @@ class Sighting(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    # User와의 관계
     user = relationship("User", lazy="joined")
+
+    images = relationship(
+        "SightingImage",
+        back_populates="sighting",
+        cascade="all, delete-orphan",
+        order_by="SightingImage.sort_order",
+        lazy="selectin",
+    )

@@ -10,22 +10,72 @@ from app.models.sighting import Sighting
 from app.models.user import User
 from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
 from app.core.notifications import get_comment_participants, create_notifications
+from app.models.sighting_image import SightingImage
 
 from app.models.keyword import KeywordSubscription
 from app.models.notification import Notification
 
 router = APIRouter()
 
+def normalize_image_urls(
+    image_urls: Optional[List[str]],
+    image_url: Optional[str],
+) -> List[str]:
+    if image_urls is not None:
+        raw_urls = image_urls
+    elif image_url:
+        raw_urls = [image_url]
+    else:
+        raw_urls = []
+
+    normalized: List[str] = []
+    seen = set()
+
+    for raw_url in raw_urls:
+        if not raw_url:
+            continue
+
+        cleaned = raw_url.strip()
+        if not cleaned:
+            continue
+
+        if cleaned in seen:
+            continue
+
+        seen.add(cleaned)
+        normalized.append(cleaned)
+
+    return normalized
+
+
+def apply_sighting_images(sighting: Sighting, image_urls: List[str]) -> None:
+    sighting.images = [
+        SightingImage(image_url=url, sort_order=index)
+        for index, url in enumerate(image_urls)
+    ]
+    sighting.image_url = image_urls[0] if image_urls else None
+
+
+def get_sighting_image_urls(sighting: Sighting) -> List[str]:
+    if sighting.images:
+        return [image.image_url for image in sighting.images if image.image_url]
+
+    if sighting.image_url:
+        return [sighting.image_url]
+
+    return []
 
 def sighting_to_response(sighting: Sighting) -> dict:
-    """Sighting ORM 객체를 응답용 dict로 변환 (닉네임 포함)"""
+    image_urls = get_sighting_image_urls(sighting)
+
     return {
         "id": sighting.id,
         "user_id": sighting.user_id,
         "user_nickname": sighting.user.nickname if sighting.user else None,
         "animal_type": sighting.animal_type,
         "description": sighting.description,
-        "image_url": sighting.image_url,
+        "image_url": image_urls[0] if image_urls else None,
+        "image_urls": image_urls,
         "latitude": sighting.latitude,
         "longitude": sighting.longitude,
         "address": sighting.address,
@@ -38,7 +88,6 @@ def sighting_to_response(sighting: Sighting) -> dict:
         "updated_at": sighting.updated_at,
     }
 
-
 @router.post("/sightings", response_model=SightingResponse)
 def create_sighting(
     data: SightingCreate,
@@ -47,7 +96,12 @@ def create_sighting(
 ):
     sighting_data = data.model_dump()
 
-    # post_type에 따라 기본 상태 설정
+    image_urls = normalize_image_urls(
+        sighting_data.pop("image_urls", None),
+        sighting_data.get("image_url"),
+    )
+    sighting_data["image_url"] = image_urls[0] if image_urls else None
+
     if sighting_data.get("post_type") == "LOST":
         default_status = "LOST"
     else:
@@ -58,11 +112,13 @@ def create_sighting(
         user_id=current_user.id,
         status=default_status,
     )
+
     db.add(sighting)
+    apply_sighting_images(sighting, image_urls)
+
     db.commit()
     db.refresh(sighting)
 
-    # 키워드 매칭 알림
     search_text = " ".join(
         filter(None, [sighting.address, sighting.description])
     ).lower()
@@ -197,7 +253,6 @@ def update_sighting_status(
 
     return sighting_to_response(sighting)
 
-
 @router.patch("/sightings/{sighting_id}", response_model=SightingResponse)
 def update_sighting(
     sighting_id: int,
@@ -218,8 +273,21 @@ def update_sighting(
 
     update_data = data.model_dump(exclude_unset=True)
 
+    has_image_urls = "image_urls" in update_data
+    has_image_url = "image_url" in update_data
+
+    incoming_image_urls = update_data.pop("image_urls", None) if has_image_urls else None
+    incoming_image_url = update_data.pop("image_url", None) if has_image_url else None
+
     for field, value in update_data.items():
         setattr(sighting, field, value)
+
+    if has_image_urls:
+        normalized_image_urls = normalize_image_urls(incoming_image_urls, None)
+        apply_sighting_images(sighting, normalized_image_urls)
+    elif has_image_url:
+        normalized_image_urls = normalize_image_urls(None, incoming_image_url)
+        apply_sighting_images(sighting, normalized_image_urls)
 
     db.commit()
     db.refresh(sighting)
