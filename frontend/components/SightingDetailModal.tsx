@@ -101,13 +101,7 @@ export default function SightingDetailModal({
   const editFileRef = useRef<HTMLInputElement>(null);
 
   const activeImageUrl = imageUrls[activeImageIndex] ?? null;
-  console.log("detail image debug", {
-    image_url: sighting.image_url,
-    image_urls: sighting.image_urls,
-    imageUrls,
-    activeImageIndex,
-    activeImageUrl,
-  });
+
   // 글이 바뀌면 스크롤 맨 위로 + 전환 효과
   useEffect(() => {
     if (scrollRef.current) {
