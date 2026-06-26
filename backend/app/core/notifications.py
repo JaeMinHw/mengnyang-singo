@@ -17,6 +17,27 @@ def get_comment_participants(db: Session, sighting_id: int) -> set[int]:
     return {row[0] for row in results}
 
 
+def create_notification(
+    db: Session,
+    user_id: int,
+    notification_type: str,
+    message: str,
+    actor_id: int | None = None,
+    sighting_id: int | None = None,
+    comment_id: int | None = None,
+):
+    notification = Notification(
+        user_id=user_id,
+        type=notification_type,
+        sighting_id=sighting_id,
+        comment_id=comment_id,
+        actor_id=actor_id,
+        message=message,
+        is_read=False,
+    )
+    db.add(notification)
+
+
 def create_notifications(
     db: Session,
     recipients: set[int],
@@ -32,13 +53,12 @@ def create_notifications(
         if user_id == exclude_user_id:
             continue
 
-        notification = Notification(
+        create_notification(
+            db=db,
             user_id=user_id,
-            type=notification_type,
+            notification_type=notification_type,
             sighting_id=sighting_id,
-            comment_id=comment_id,
-            actor_id=actor_id,
             message=message,
-            is_read=False,
+            actor_id=actor_id,
+            comment_id=comment_id,
         )
-        db.add(notification)

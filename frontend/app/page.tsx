@@ -2,7 +2,8 @@
 
 import { Map as KakaoMap } from "react-kakao-maps-sdk";
 import Script from "next/script";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+
 
 import api from "@/lib/api";
 import Header from "@/components/Header";
@@ -21,7 +22,8 @@ import MapWithLogic from "@/components/MapWithLogic";
 import { useSearchParams, useRouter } from "next/navigation";
 
 
-export default function Home() {
+function HomeContent() {
+
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -346,5 +348,19 @@ export default function Home() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <main className="w-full h-[100dvh] overflow-hidden bg-gray-50 flex items-center justify-center">
+          <div className="text-gray-600 text-sm">페이지를 불러오는 중...</div>
+        </main>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }

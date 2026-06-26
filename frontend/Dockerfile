@@ -1,38 +1,32 @@
-# 1. 빌드 단계 (Builder)
-# --------------------
-# 버전을 18 -> 20으로 변경
+# 1. 빌드 단계
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace/frontend
 
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm install
 
-COPY . .
+WORKDIR /workspace
+COPY frontend/ ./frontend/
+COPY shared/ ./shared/
 
-# 프로덕션용으로 앱을 빌드합니다.
+WORKDIR /workspace/frontend
 
 ARG NEXT_PUBLIC_KAKAO_MAP_API_KEY
 ENV NEXT_PUBLIC_KAKAO_MAP_API_KEY=$NEXT_PUBLIC_KAKAO_MAP_API_KEY
 
-
 RUN npm run build
 
 
-# 2. 프로덕션 단계 (Runner)
-# --------------------
-# 여기도 버전을 18 -> 20으로 변경
+# 2. 프로덕션 단계
 FROM node:20-alpine
 
 WORKDIR /app
 
-# .env 파일은 여기서 더 이상 필요 없습니다.
-# 환경변수는 docker-compose에서 주입됩니다.
-
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/public ./public
+COPY --from=builder /workspace/frontend/.next ./.next
+COPY --from=builder /workspace/frontend/node_modules ./node_modules
+COPY --from=builder /workspace/frontend/package.json ./package.json
+COPY --from=builder /workspace/frontend/public ./public
 
 EXPOSE 3000
 

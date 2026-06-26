@@ -21,7 +21,12 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
-
+  const TYPE_CONFIG: Record<string, { emoji: string; label: string }> = {
+    NEW_COMMENT: { emoji: "💬", label: "새 댓글" },
+    STATUS_CHANGED: { emoji: "🔄", label: "상태 변경" },
+    KEYWORD_MATCH: { emoji: "🔍", label: "키워드 매칭" },
+    SIMILAR_MATCH: { emoji: "🧩", label: "유사 글 매칭" },
+  };
   useEffect(() => {
     api
       .get<CurrentUser>("/me")
@@ -116,7 +121,7 @@ export default function NotificationsPage() {
               <p className="text-4xl mb-3">🔔</p>
               <p className="text-gray-700 font-medium">아직 알림이 없습니다.</p>
               <p className="text-sm text-gray-500 mt-2">
-                내 글에 댓글이 달리거나 상태가 변경되면 알림이 옵니다.
+                내 글에 댓글이 달리거나 상태가 변경되거나 유사한 글이 등록되면 알림이 옵니다.
               </p>
             </div>
           ) : (

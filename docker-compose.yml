@@ -75,8 +75,9 @@ services:
 
   # === 프론트엔드 서비스 추가 ===
   app-frontend:
-    build: # build는 한 번만!
-      context: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         NEXT_PUBLIC_KAKAO_MAP_API_KEY: ${NEXT_PUBLIC_KAKAO_MAP_API_KEY}
     container_name: mengnyang-frontend

@@ -14,8 +14,82 @@ from app.models.sighting_image import SightingImage
 
 from app.models.keyword import KeywordSubscription
 from app.models.notification import Notification
+from app.core.notifications import (
+    get_comment_participants,
+    create_notifications,
+    create_notification,
+)
+from app.core.similar_sightings import find_similar_sightings
 
 router = APIRouter()
+
+def get_post_type_label(post_type: str) -> str:
+    return "실종 글" if post_type == "LOST" else "목격 글"
+
+
+def format_distance_label(distance_meters: float) -> str:
+    if distance_meters < 1000:
+        return f"{round(distance_meters)}m"
+    return f"{distance_meters / 1000:.1f}km"
+
+
+def create_similar_match_notifications(
+    db: Session,
+    new_sighting: Sighting,
+    current_user: User,
+) -> None:
+    matches = find_similar_sightings(
+        db=db,
+        base_sighting=new_sighting,
+        exclude_user_id=current_user.id,
+    )
+
+    if not matches:
+        return
+
+    new_post_label = get_post_type_label(new_sighting.post_type)
+    notified_candidate_users: set[int] = set()
+
+    for match in matches:
+        candidate = match.sighting
+        candidate_post_label = get_post_type_label(candidate.post_type)
+        distance_label = format_distance_label(match.distance_meters)
+
+        feature_suffix = ""
+        if match.matched_features:
+            feature_suffix = f" (공통 특징: {', '.join(match.matched_features[:2])})"
+
+        # 1) 새 글 작성자에게: 기존 매칭 글 알림
+        create_notification(
+            db=db,
+            user_id=current_user.id,
+            notification_type="SIMILAR_MATCH",
+            sighting_id=candidate.id,
+            actor_id=candidate.user_id,
+            message=(
+                f"등록한 {new_post_label}과 유사한 {candidate_post_label}이 "
+                f"약 {distance_label} 거리에서 확인되었습니다.{feature_suffix}"
+            ),
+        )
+
+        # 2) 기존 글 작성자에게: 새 글 알림 (같은 사용자 중복 방지)
+        if candidate.user_id in notified_candidate_users:
+            continue
+
+        create_notification(
+            db=db,
+            user_id=candidate.user_id,
+            notification_type="SIMILAR_MATCH",
+            sighting_id=new_sighting.id,
+            actor_id=current_user.id,
+            message=(
+                f"내 {candidate_post_label}과 유사한 새 {new_post_label}이 "
+                f"약 {distance_label} 거리에서 등록되었습니다.{feature_suffix}"
+            ),
+        )
+        notified_candidate_users.add(candidate.user_id)
+
+    db.commit()
 
 def normalize_image_urls(
     image_urls: Optional[List[str]],
@@ -154,7 +228,12 @@ def create_sighting(
 
         if notified_users:
             db.commit()
-
+        # 유사 글 매칭 알림 (양방향)
+    create_similar_match_notifications(
+        db=db,
+        new_sighting=sighting,
+        current_user=current_user,
+    )
     return sighting_to_response(sighting)
 
 @router.patch("/sightings/{sighting_id}/status", response_model=SightingResponse)
