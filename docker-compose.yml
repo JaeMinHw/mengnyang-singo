@@ -19,8 +19,9 @@ services:
 
   # === 백엔드 서비스 (Blue/Green) ===
   app-blue:
-    build: 
-      context: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: mengnyang-blue
     environment:
       - APP_VERSION=v1
@@ -38,7 +39,8 @@ services:
 
   app-green:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: mengnyang-green
     environment:
       - APP_VERSION=v2
@@ -59,10 +61,12 @@ services:
 
   app-migrate:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     working_dir: /app
     volumes:
       - ./backend:/app
+      - ./shared:/app/shared:ro
     environment:
       - DATABASE_URL=mysql+pymysql://root:root1234@db:3306/mengnyang
       - SECRET_KEY=${SECRET_KEY}
