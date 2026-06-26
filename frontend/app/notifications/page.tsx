@@ -8,11 +8,7 @@ import Header from "@/components/Header";
 import type { CurrentUser, Notification } from "@/types/sighting";
 import { formatDate } from "@/lib/sightingUtils";
 
-const TYPE_CONFIG: Record<string, { emoji: string; label: string }> = {
-  NEW_COMMENT: { emoji: "💬", label: "새 댓글" },
-  STATUS_CHANGED: { emoji: "🔄", label: "상태 변경" },
-  KEYWORD_MATCH: { emoji: "🔍", label: "키워드 매칭" },
-};
+
 
 export default function NotificationsPage() {
   const router = useRouter();

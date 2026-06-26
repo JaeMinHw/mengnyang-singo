@@ -9,7 +9,7 @@ from app.core.dependencies import get_current_user
 from app.models.sighting import Sighting
 from app.models.user import User
 from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
-from app.core.notifications import get_comment_participants, create_notifications
+
 from app.models.sighting_image import SightingImage
 
 from app.models.keyword import KeywordSubscription

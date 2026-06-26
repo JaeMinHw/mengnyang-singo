@@ -5,20 +5,11 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.sighting import Sighting
+from app.core.synonyms import load_synonym_groups
 
 
 SIMILAR_SIGHTING_MAX_DISTANCE_METERS = 3000
 SIMILAR_SIGHTING_MAX_RESULTS = 3
-
-FEATURE_KEYWORDS = [
-    "검정", "흰색", "갈색", "회색", "노란색", "주황색", "베이지",
-    "고등어", "치즈", "삼색", "카오스", "얼룩", "줄무늬", "턱시도", "멀",
-    "초소형", "소형", "중형", "대형", "초대형",
-    "장모", "중모", "단모", "곱슬", "강모", "무모",
-    "새끼", "성체", "노령",
-    "단미", "접힌귀", "선귀", "오드아이",
-    "장화", "흉터",
-]
 
 
 @dataclass
@@ -49,14 +40,27 @@ def get_distance_in_meters(
     return r * c
 
 
+def get_representative_keywords() -> list[str]:
+    """shared synonym-groups.json에서 각 그룹의 대표어(첫 번째 단어)만 추출"""
+    groups = load_synonym_groups()
+    return [group[0] for group in groups if group]
+
+
+def normalize_text(text: str) -> str:
+    """텍스트를 소문자로 정규화"""
+    return text.lower()
+
+
 def extract_feature_keywords(text: Optional[str]) -> list[str]:
+    """텍스트에서 대표 특징 키워드 추출"""
     if not text:
         return []
 
-    normalized = text.lower()
+    normalized = normalize_text(text)
+    representative_keywords = get_representative_keywords()
     matched: list[str] = []
 
-    for keyword in FEATURE_KEYWORDS:
+    for keyword in representative_keywords:
         if keyword in normalized:
             matched.append(keyword)
 
@@ -117,9 +121,9 @@ def find_similar_sightings(
 
     scored.sort(
         key=lambda item: (
-            -len(item.matched_features),           # 공통 특징 많은 순
-            item.distance_meters,                  # 가까운 순
-            -(item.sighting.created_at.timestamp() if item.sighting.created_at else 0),  # 최신 순
+            -len(item.matched_features),
+            item.distance_meters,
+            -(item.sighting.created_at.timestamp() if item.sighting.created_at else 0),
         )
     )
 
