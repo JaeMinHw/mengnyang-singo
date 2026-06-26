@@ -14,8 +14,9 @@ import type { CurrentUser, Sighting } from "@/types/sighting";
 import {
   parseAddress,
   getDistanceInMeters,
-  formatDate,
 } from "@/lib/sightingUtils";
+
+const MAX_IMAGE_COUNT = 5;
 
 export default function EditSightingPage() {
   const router = useRouter();
@@ -33,7 +34,6 @@ export default function EditSightingPage() {
   const [longitude, setLongitude] = useState("");
   const [address, setAddress] = useState("");
   const [locationDetail, setLocationDetail] = useState("");
-
   const [hasChosenLocation, setHasChosenLocation] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -41,29 +41,24 @@ export default function EditSightingPage() {
   const [mapLoading, setMapLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
-  const [removeImage, setRemoveImage] = useState(false);
+  // 다중 이미지 상태
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
+  const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
 
   const isSighting = postType === "SIGHTING";
 
-  const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`;
+  const totalImageCount = existingImageUrls.length + newImageFiles.length;
 
-  const cleanupPreviewUrl = (url: string | null) => {
-    if (url && url.startsWith("blob:")) {
-      URL.revokeObjectURL(url);
-    }
-  };
+  const KAKAO_SDK_URL = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_API_KEY}&libraries=services&autoload=false`;
 
   const reverseGeocode = useCallback((lat: number, lng: number) => {
     if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
 
     const geocoder = new window.kakao.maps.services.Geocoder();
-
     geocoder.coord2Address(lng, lat, (result: any, status: any) => {
       if (status === window.kakao.maps.services.Status.OK && result[0]) {
         const addr = result[0].road_address
@@ -93,7 +88,6 @@ export default function EditSightingPage() {
     const center = map.getCenter();
     const lat = center.getLat();
     const lng = center.getLng();
-
     setLatitude(lat.toString());
     setLongitude(lng.toString());
     reverseGeocode(lat, lng);
@@ -101,9 +95,7 @@ export default function EditSightingPage() {
   };
 
   const handleScriptLoad = () => {
-    window.kakao.maps.load(() => {
-      setMapLoading(false);
-    });
+    window.kakao.maps.load(() => setMapLoading(false));
   };
 
   useEffect(() => {
@@ -112,6 +104,7 @@ export default function EditSightingPage() {
     }
   }, []);
 
+  // 글 데이터 로드
   useEffect(() => {
     if (!sightingId) {
       setErrorMessage("잘못된 접근입니다.");
@@ -138,9 +131,7 @@ export default function EditSightingPage() {
 
         const { main, detail } = parseAddress(sighting.address);
 
-        setPostType(
-          sighting.post_type === "LOST" ? "LOST" : "SIGHTING"
-        );
+        setPostType(sighting.post_type === "LOST" ? "LOST" : "SIGHTING");
         setAnimalType(sighting.animal_type);
         setDescription(sighting.description || "");
         setLatitude(sighting.latitude.toString());
@@ -149,9 +140,15 @@ export default function EditSightingPage() {
         setLocationDetail(detail || "");
         setHasChosenLocation(true);
 
-        setExistingImageUrl(sighting.image_url);
-        setImagePreview(sighting.image_url);
-        setRemoveImage(false);
+        // image_urls 우선, 없으면 image_url 폴백
+        const urls =
+          sighting.image_urls && sighting.image_urls.length > 0
+            ? sighting.image_urls
+            : sighting.image_url
+            ? [sighting.image_url]
+            : [];
+
+        setExistingImageUrls(urls);
       })
       .catch((err: any) => {
         console.error("수정 페이지 데이터 요청 실패:", err);
@@ -170,11 +167,12 @@ export default function EditSightingPage() {
       });
   }, [router, sightingId]);
 
+  // 언마운트 시 새 이미지 미리보기 URL 정리
   useEffect(() => {
     return () => {
-      cleanupPreviewUrl(imagePreview);
+      newImagePreviews.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [imagePreview]);
+  }, []);
 
   const handleUseCurrentLocation = () => {
     setErrorMessage("");
@@ -188,17 +186,13 @@ export default function EditSightingPage() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        applyPosition(lat, lng);
+        applyPosition(position.coords.latitude, position.coords.longitude);
         setLocationLoading(false);
       },
       (error) => {
-        console.error("현재 위치 가져오기 실패:", error);
-
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            setErrorMessage("위치 정보 접근이 거부되었습니다. 브라우저 권한을 확인해주세요.");
+            setErrorMessage("위치 정보 접근이 거부되었습니다.");
             break;
           case error.POSITION_UNAVAILABLE:
             setErrorMessage("현재 위치 정보를 가져올 수 없습니다.");
@@ -209,97 +203,94 @@ export default function EditSightingPage() {
           default:
             setErrorMessage("현재 위치를 가져오지 못했습니다.");
         }
-
         setLocationLoading(false);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    cleanupPreviewUrl(imagePreview);
+    const remaining = MAX_IMAGE_COUNT - totalImageCount;
 
-    setImageFile(file);
-    setRemoveImage(false);
+    if (remaining <= 0) {
+      setErrorMessage(`사진은 최대 ${MAX_IMAGE_COUNT}장까지 등록할 수 있습니다.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
+    const selectedFiles = Array.from(files).slice(0, remaining);
+    const newPreviews = selectedFiles.map((f) => URL.createObjectURL(f));
 
+    setNewImageFiles((prev) => [...prev, ...selectedFiles]);
+    setNewImagePreviews((prev) => [...prev, ...newPreviews]);
+
+    // EXIF는 첫 번째 새 파일 기준
+    const firstFile = selectedFiles[0];
     try {
-      const exifData = await exifr.gps(file);
+      const exifData = await exifr.gps(firstFile);
 
-      if (exifData && exifData.latitude && exifData.longitude) {
+      if (exifData?.latitude && exifData?.longitude) {
         const exifLat = exifData.latitude;
         const exifLng = exifData.longitude;
-
         const userLat = parseFloat(latitude);
         const userLng = parseFloat(longitude);
 
         const hasValidUserPosition =
-          hasChosenLocation &&
-          !Number.isNaN(userLat) &&
-          !Number.isNaN(userLng);
+          hasChosenLocation && !Number.isNaN(userLat) && !Number.isNaN(userLng);
 
         if (!hasValidUserPosition) {
           applyPosition(exifLat, exifLng);
-          setErrorMessage("");
-          return;
-        }
-
-        const distance = getDistanceInMeters(userLat, userLng, exifLat, exifLng);
-
-        if (distance <= 500) {
-          return;
-        }
-
-        const useExif = window.confirm(
-          `사진이 촬영된 위치가 현재 선택한 위치와 약 ${Math.round(distance)}m 떨어져 있습니다.\n\n사진 촬영 위치로 변경하시겠습니까?`
-        );
-
-        if (useExif) {
-          applyPosition(exifLat, exifLng);
+        } else {
+          const distance = getDistanceInMeters(userLat, userLng, exifLat, exifLng);
+          if (distance > 500) {
+            const useExif = window.confirm(
+              `사진이 촬영된 위치가 현재 선택한 위치와 약 ${Math.round(distance)}m 떨어져 있습니다.\n\n사진 촬영 위치로 변경하시겠습니까?`
+            );
+            if (useExif) applyPosition(exifLat, exifLng);
+          }
         }
       }
     } catch (err) {
       console.log("📸 EXIF 읽기 실패 (무시 가능):", err);
     }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleImageRemove = () => {
-    cleanupPreviewUrl(imagePreview);
-    setImageFile(null);
-    setImagePreview(null);
-    setRemoveImage(true);
+  // 기존 이미지 제거
+  const handleExistingImageRemove = (index: number) => {
+    setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
+  };
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  // 새 이미지 제거
+  const handleNewImageRemove = (index: number) => {
+    setNewImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setNewImagePreviews((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  // 새 이미지 업로드 → URL 배열 반환
+  const uploadNewImages = async (): Promise<string[]> => {
+    if (newImageFiles.length === 0) return [];
+
+    const urls: string[] = [];
+    for (const file of newImageFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post<{ image_url: string }>(
+        "/upload/image",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      urls.push(res.data.image_url);
     }
-  };
-
-  const uploadImage = async (): Promise<string | null> => {
-    if (!imageFile) return null;
-
-    const formData = new FormData();
-    formData.append("file", imageFile);
-
-    const response = await api.post<{ image_url: string }>(
-      "/upload/image",
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
-    return response.data.image_url;
+    return urls;
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -334,18 +325,16 @@ export default function EditSightingPage() {
       : address;
 
     try {
-      let nextImageUrl = existingImageUrl;
+      // 새 이미지 업로드
+      const uploadedUrls = await uploadNewImages();
 
-      if (imageFile) {
-        nextImageUrl = await uploadImage();
-      } else if (removeImage) {
-        nextImageUrl = null;
-      }
+      // 최종 이미지 목록: 기존 유지분 + 새로 업로드한 것
+      const finalImageUrls = [...existingImageUrls, ...uploadedUrls];
 
       await api.patch(`/sightings/${sightingId}`, {
         animal_type: animalType,
         description: description || null,
-        image_url: nextImageUrl,
+        image_urls: finalImageUrls,
         latitude: lat,
         longitude: lng,
         address: fullAddress || null,
@@ -375,7 +364,6 @@ export default function EditSightingPage() {
 
   const parsedLat = parseFloat(latitude);
   const parsedLng = parseFloat(longitude);
-
   const mapCenter =
     !isNaN(parsedLat) && !isNaN(parsedLng)
       ? { lat: parsedLat, lng: parsedLng }
@@ -383,7 +371,11 @@ export default function EditSightingPage() {
 
   return (
     <>
-      <Script src={KAKAO_SDK_URL} strategy="afterInteractive" onLoad={handleScriptLoad} />
+      <Script
+        src={KAKAO_SDK_URL}
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+      />
 
       <main className="min-h-[100dvh] bg-gray-50">
         <Header currentUser={currentUser} authLoading={authLoading} />
@@ -407,9 +399,6 @@ export default function EditSightingPage() {
                   <h1 className="text-2xl font-bold text-gray-900">글 수정</h1>
                   <p className="text-sm text-gray-500 mt-1">
                     필요한 정보만 수정한 뒤 저장해주세요.
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    글 종류는 수정할 수 없습니다. · 작성일 {latitude && longitude ? "" : ""}
                   </p>
                 </div>
 
@@ -468,40 +457,83 @@ export default function EditSightingPage() {
                     />
                   </div>
 
-                  {/* 사진 */}
+                  {/* 사진 - 다중 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      사진 <span className="text-gray-400">(선택)</span>
+                      사진{" "}
+                      <span className="text-gray-400">
+                        (선택 · 최대 {MAX_IMAGE_COUNT}장)
+                      </span>
                     </label>
 
-                    {imagePreview ? (
-                      <div className="space-y-2">
-                        <div className="relative">
-                          <img
-                            src={imagePreview}
-                            alt="미리보기"
-                            className="w-full h-48 object-cover rounded-xl border border-gray-200"
-                          />
-                        </div>
+                    {/* 이미지 그리드 */}
+                    {totalImageCount > 0 && (
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        {/* 기존 이미지 */}
+                        {existingImageUrls.map((url, index) => (
+                          <div key={`existing-${index}`} className="relative aspect-square">
+                            <img
+                              src={url}
+                              alt={`기존 이미지 ${index + 1}`}
+                              className="w-full h-full object-cover rounded-xl border border-gray-200"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleExistingImageRemove(index)}
+                              className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
+                            >
+                              ✕
+                            </button>
+                            {index === 0 && newImageFiles.length === 0 && (
+                              <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1.5 py-0.5 rounded-md">
+                                대표
+                              </span>
+                            )}
+                          </div>
+                        ))}
 
-                        <div className="flex gap-2">
+                        {/* 새 이미지 */}
+                        {newImagePreviews.map((preview, index) => (
+                          <div key={`new-${index}`} className="relative aspect-square">
+                            <img
+                              src={preview}
+                              alt={`새 이미지 ${index + 1}`}
+                              className="w-full h-full object-cover rounded-xl border border-blue-200"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleNewImageRemove(index)}
+                              className="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors text-xs"
+                            >
+                              ✕
+                            </button>
+                            {existingImageUrls.length === 0 && index === 0 && (
+                              <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1.5 py-0.5 rounded-md">
+                                대표
+                              </span>
+                            )}
+                            <span className="absolute bottom-1 right-1 text-xs bg-blue-500/80 text-white px-1.5 py-0.5 rounded-md">
+                              새 사진
+                            </span>
+                          </div>
+                        ))}
+
+                        {/* 추가 버튼 */}
+                        {totalImageCount < MAX_IMAGE_COUNT && (
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="aspect-square rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-gray-400 transition-colors"
                           >
-                            다른 사진 선택
+                            <span className="text-xl">+</span>
+                            <span className="text-xs mt-0.5">추가</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleImageRemove}
-                            className="flex-1 rounded-xl bg-red-50 border border-red-200 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
-                          >
-                            사진 제거
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    ) : (
+                    )}
+
+                    {/* 사진 없을 때 */}
+                    {totalImageCount === 0 && (
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -509,6 +541,9 @@ export default function EditSightingPage() {
                       >
                         <span className="text-2xl mb-1">📷</span>
                         <span className="text-sm">사진을 선택해주세요</span>
+                        <span className="text-xs text-gray-400 mt-0.5">
+                          최대 {MAX_IMAGE_COUNT}장
+                        </span>
                       </button>
                     )}
 
@@ -516,6 +551,7 @@ export default function EditSightingPage() {
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={handleImageSelect}
                       className="hidden"
                     />
@@ -532,12 +568,12 @@ export default function EditSightingPage() {
                       {locationLoading
                         ? "현재 위치 확인 중..."
                         : isSighting
-                          ? "📍 현재 위치로 재설정"
-                          : "📍 마지막으로 본 위치로 설정"}
+                        ? "📍 현재 위치로 재설정"
+                        : "📍 마지막으로 본 위치로 설정"}
                     </button>
                   </div>
 
-                  {/* 작은 지도 */}
+                  {/* 지도 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {isSighting ? "목격 위치" : "마지막으로 본 위치"}
@@ -557,18 +593,11 @@ export default function EditSightingPage() {
                             onCreate={(map) => {
                               mapRef.current = map;
                             }}
-                            onDragEnd={() => {
-                              setHasChosenLocation(true);
-                            }}
-                            onIdle={(map) => {
-                              updatePositionFromMapCenter(map);
-                            }}
+                            onDragEnd={() => setHasChosenLocation(true)}
+                            onIdle={(map) => updatePositionFromMapCenter(map)}
                           />
-
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                            <div className="flex flex-col items-center">
-                              <span className="text-3xl drop-shadow-lg">📍</span>
-                            </div>
+                            <span className="text-3xl drop-shadow-lg">📍</span>
                           </div>
                         </>
                       )}
@@ -616,7 +645,7 @@ export default function EditSightingPage() {
                     </div>
                   )}
 
-                  {/* 버튼 영역 */}
+                  {/* 버튼 */}
                   <div className="flex gap-3 pt-2">
                     <Link
                       href="/mypage"
