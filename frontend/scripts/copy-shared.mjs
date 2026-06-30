@@ -1,9 +1,10 @@
-import { promises as fs } from "fs";
+import { promises as fs, watch } from "fs";
 import path from "path";
 
 const frontendRoot = process.cwd();
 const sourceDir = path.resolve(frontendRoot, "../shared");
 const targetDir = path.resolve(frontendRoot, "./shared");
+const isWatch = process.argv.includes("--watch");
 
 async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
@@ -30,7 +31,38 @@ async function copyJsonFiles() {
   }
 }
 
-copyJsonFiles().catch((error) => {
+function startWatch() {
+  console.log("[copy-shared] watching ../shared/*.json for changes...");
+
+  let debounceTimer;
+
+  const scheduleCopy = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      copyJsonFiles().catch((error) => {
+        console.error("[copy-shared] watch copy failed:", error);
+      });
+    }, 200);
+  };
+
+  watch(sourceDir, { recursive: true }, (_event, filename) => {
+    if (!filename || !filename.endsWith(".json")) {
+      return;
+    }
+
+    scheduleCopy();
+  });
+}
+
+async function main() {
+  await copyJsonFiles();
+
+  if (isWatch) {
+    startWatch();
+  }
+}
+
+main().catch((error) => {
   console.error("[copy-shared] failed:", error);
   process.exit(1);
 });
