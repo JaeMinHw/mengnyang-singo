@@ -19,7 +19,11 @@ from app.core.notifications import (
     create_notifications,
     create_notification,
 )
-from app.core.similar_sightings import find_similar_sightings
+from app.core.similar_sightings import (
+    find_similar_sightings,
+    has_similar_match_history,
+    record_similar_match_history,
+)
 
 router = APIRouter()
 
@@ -32,17 +36,30 @@ def format_distance_label(distance_meters: float) -> str:
         return f"{round(distance_meters)}m"
     return f"{distance_meters / 1000:.1f}km"
 
-
 def create_similar_match_notifications(
     db: Session,
     new_sighting: Sighting,
     current_user: User,
+    trigger_action: str = "create",
 ) -> None:
     matches = find_similar_sightings(
         db=db,
         base_sighting=new_sighting,
         exclude_user_id=current_user.id,
     )
+
+    if trigger_action == "update":
+        owner_action_label = "수정한"
+        candidate_action_prefix = ""
+        candidate_action_suffix = "수정되었습니다"
+    elif trigger_action == "reopen":
+        owner_action_label = "다시 활성화한"
+        candidate_action_prefix = ""
+        candidate_action_suffix = "다시 활성화되었습니다"
+    else:
+        owner_action_label = "등록한"
+        candidate_action_prefix = "새 "
+        candidate_action_suffix = "등록되었습니다"
 
     if not matches:
         return
@@ -60,20 +77,40 @@ def create_similar_match_notifications(
             feature_suffix = f" (공통 특징: {', '.join(match.matched_features[:2])})"
 
         # 1) 새 글 작성자에게: 기존 매칭 글 알림
-        create_notification(
+        if not has_similar_match_history(
             db=db,
-            user_id=current_user.id,
-            notification_type="SIMILAR_MATCH",
-            sighting_id=candidate.id,
-            actor_id=candidate.user_id,
-            message=(
-                f"등록한 {new_post_label}과 유사한 {candidate_post_label}이 "
-                f"약 {distance_label} 거리에서 확인되었습니다.{feature_suffix}"
-            ),
-        )
+            sighting_id_1=new_sighting.id,
+            sighting_id_2=candidate.id,
+            recipient_user_id=current_user.id,
+        ):
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type="SIMILAR_MATCH",
+                sighting_id=candidate.id,
+                actor_id=candidate.user_id,
+                message=(
+                    f"{owner_action_label} {new_post_label}과 유사한 {candidate_post_label}이 "
+                    f"약 {distance_label} 거리에서 확인되었습니다.{feature_suffix}"
+                ),
+            )
+            record_similar_match_history(
+                db=db,
+                sighting_id_1=new_sighting.id,
+                sighting_id_2=candidate.id,
+                recipient_user_id=current_user.id,
+            )
 
         # 2) 기존 글 작성자에게: 새 글 알림 (같은 사용자 중복 방지)
         if candidate.user_id in notified_candidate_users:
+            continue
+
+        if has_similar_match_history(
+            db=db,
+            sighting_id_1=new_sighting.id,
+            sighting_id_2=candidate.id,
+            recipient_user_id=candidate.user_id,
+        ):
             continue
 
         create_notification(
@@ -83,13 +120,37 @@ def create_similar_match_notifications(
             sighting_id=new_sighting.id,
             actor_id=current_user.id,
             message=(
-                f"내 {candidate_post_label}과 유사한 새 {new_post_label}이 "
-                f"약 {distance_label} 거리에서 등록되었습니다.{feature_suffix}"
+                f"내 {candidate_post_label}과 유사한 {candidate_action_prefix}{new_post_label}이 "
+                f"약 {distance_label} 거리에서 {candidate_action_suffix}.{feature_suffix}"
             ),
+        )
+        record_similar_match_history(
+            db=db,
+            sighting_id_1=new_sighting.id,
+            sighting_id_2=candidate.id,
+            recipient_user_id=candidate.user_id,
         )
         notified_candidate_users.add(candidate.user_id)
 
     db.commit()
+
+
+
+def has_similar_match_relevant_changes(
+    sighting: Sighting,
+    update_data: dict,
+) -> bool:
+    relevant_fields = ("animal_type", "description", "latitude", "longitude")
+
+    for field in relevant_fields:
+        if field not in update_data:
+            continue
+
+        if getattr(sighting, field) != update_data[field]:
+            return True
+
+    return False
+
 
 def normalize_image_urls(
     image_urls: Optional[List[str]],
@@ -330,7 +391,16 @@ def update_sighting_status(
 
     db.commit()
 
+    if previous_status == "FOUND" and next_status != "FOUND":
+        create_similar_match_notifications(
+            db=db,
+            new_sighting=sighting,
+            current_user=current_user,
+            trigger_action="reopen",
+        )
+
     return sighting_to_response(sighting)
+
 
 @router.patch("/sightings/{sighting_id}", response_model=SightingResponse)
 def update_sighting(
@@ -352,6 +422,11 @@ def update_sighting(
 
     update_data = data.model_dump(exclude_unset=True)
 
+    should_retry_similar_match = has_similar_match_relevant_changes(
+        sighting,
+        update_data,
+    )
+
     has_image_urls = "image_urls" in update_data
     has_image_url = "image_url" in update_data
 
@@ -370,6 +445,13 @@ def update_sighting(
 
     db.commit()
     db.refresh(sighting)
+    if should_retry_similar_match:
+        create_similar_match_notifications(
+            db=db,
+            new_sighting=sighting,
+            current_user=current_user,
+            trigger_action="update",
+        )
 
     return sighting_to_response(sighting)
 

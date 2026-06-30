@@ -5,7 +5,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.sighting import Sighting
-from app.core.synonyms import load_synonym_groups
+from app.core.synonyms import load_synonym_groups, normalize_search_text
+from app.models.similar_match_history import SimilarMatchHistory
 
 
 SIMILAR_SIGHTING_MAX_DISTANCE_METERS = 3000
@@ -17,6 +18,59 @@ class SimilarSightingMatch:
     sighting: Sighting
     distance_meters: float
     matched_features: list[str]
+
+
+def get_similar_match_pair_ids(
+    sighting_id_1: int,
+    sighting_id_2: int,
+) -> tuple[int, int]:
+    """같은 글쌍을 방향 없이 비교하기 위해 ID 오름차순으로 정렬"""
+    if sighting_id_1 < sighting_id_2:
+        return sighting_id_1, sighting_id_2
+    return sighting_id_2, sighting_id_1
+
+
+def has_similar_match_history(
+    db: Session,
+    sighting_id_1: int,
+    sighting_id_2: int,
+    recipient_user_id: int,
+) -> bool:
+    pair_source_id, pair_target_id = get_similar_match_pair_ids(
+        sighting_id_1,
+        sighting_id_2,
+    )
+
+    return (
+        db.query(SimilarMatchHistory.id)
+        .filter(
+            SimilarMatchHistory.source_sighting_id == pair_source_id,
+            SimilarMatchHistory.target_sighting_id == pair_target_id,
+            SimilarMatchHistory.recipient_user_id == recipient_user_id,
+        )
+        .first()
+        is not None
+    )
+
+
+def record_similar_match_history(
+    db: Session,
+    sighting_id_1: int,
+    sighting_id_2: int,
+    recipient_user_id: int,
+) -> None:
+    pair_source_id, pair_target_id = get_similar_match_pair_ids(
+        sighting_id_1,
+        sighting_id_2,
+    )
+
+    db.add(
+        SimilarMatchHistory(
+            source_sighting_id=pair_source_id,
+            target_sighting_id=pair_target_id,
+            recipient_user_id=recipient_user_id,
+        )
+    )
 
 
 def get_distance_in_meters(
@@ -40,29 +94,21 @@ def get_distance_in_meters(
     return r * c
 
 
-def get_representative_keywords() -> list[str]:
-    """shared synonym-groups.json에서 각 그룹의 대표어(첫 번째 단어)만 추출"""
-    groups = load_synonym_groups()
-    return [group[0] for group in groups if group]
-
-
-def normalize_text(text: str) -> str:
-    """텍스트를 소문자로 정규화"""
-    return text.lower()
-
-
 def extract_feature_keywords(text: Optional[str]) -> list[str]:
-    """텍스트에서 대표 특징 키워드 추출"""
+    """텍스트에서 대표 특징 키워드 추출 (프론트 extractFeatureKeywords와 동일)"""
     if not text:
         return []
 
-    normalized = normalize_text(text)
-    representative_keywords = get_representative_keywords()
+    normalized = normalize_search_text(text)
     matched: list[str] = []
 
-    for keyword in representative_keywords:
-        if keyword in normalized:
-            matched.append(keyword)
+    for group in load_synonym_groups():
+        if not group:
+            continue
+
+        representative = group[0].lower()
+        if representative in normalized:
+            matched.append(group[0])
 
     return matched
 
@@ -75,6 +121,9 @@ def find_similar_sightings(
     max_results: int = SIMILAR_SIGHTING_MAX_RESULTS,
 ) -> list[SimilarSightingMatch]:
     if base_sighting.post_type not in {"SIGHTING", "LOST"}:
+        return []
+
+    if base_sighting.is_deleted or base_sighting.status == "FOUND":
         return []
 
     opposite_post_type = "LOST" if base_sighting.post_type == "SIGHTING" else "SIGHTING"

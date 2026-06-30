@@ -2,7 +2,6 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from app.models.sighting_image import SightingImage
 
 from alembic import context
 
@@ -27,15 +26,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.database import Base
 from app.models.sighting import Sighting
-from app.models.user import User
-from app.models.comment import Comment
-from app.models.notification import Notification
-
-from app.models.sighting import Sighting
+from app.models.sighting_image import SightingImage
 from app.models.user import User
 from app.models.comment import Comment
 from app.models.notification import Notification
 from app.models.keyword import KeywordSubscription
+from app.models.similar_match_history import SimilarMatchHistory
 
 target_metadata = Base.metadata
 
