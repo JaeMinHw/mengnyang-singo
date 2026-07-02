@@ -25,6 +25,18 @@ export default function MyPage() {
   const [keywords, setKeywords] = useState<KeywordSubscription[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const [keywordLoading, setKeywordLoading] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterAnimalType, setFilterAnimalType] = useState<string>("");
+  const [filterPostType, setFilterPostType] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const animalTypeOptions = [
+    { value: "", label: "전체 동물" },
+    { value: "CAT", label: "고양이" },
+    { value: "DOG", label: "개" },
+    { value: "OTHER", label: "기타" },
+  ];
   useEffect(() => {
     api
       .get<CurrentUser>("/me")
@@ -121,6 +133,43 @@ export default function MyPage() {
       }
     }
   };
+
+  const ARCHIVE_THRESHOLD_DAYS = 30;
+
+  const filteredSightings = useMemo(() => {
+    const now = new Date();
+
+    return mySightings.filter((s) => {
+      // 보관 포함 여부
+      if (!includeArchived) {
+        if (s.status === "FOUND" && s.resolved_at) {
+          const resolvedAt = new Date(s.resolved_at);
+          const diffDays =
+            (now.getTime() - resolvedAt.getTime()) / (1000 * 60 * 60 * 24);
+          if (diffDays >= ARCHIVE_THRESHOLD_DAYS) return false;
+        }
+      }
+
+      // 동물 종류
+      if (filterAnimalType && s.animal_type !== filterAnimalType) return false;
+
+      // 글 유형
+      if (filterPostType && s.post_type !== filterPostType) return false;
+
+      // 상태
+      if (filterStatus && s.status !== filterStatus) return false;
+
+      // 검색어
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const inAddress = s.address?.toLowerCase().includes(q) ?? false;
+        const inDescription = s.description?.toLowerCase().includes(q) ?? false;
+        if (!inAddress && !inDescription) return false;
+      }
+
+      return true;
+    });
+  }, [mySightings, searchQuery, filterAnimalType, filterPostType, filterStatus, includeArchived]);
 
   const relatedSightings = useMemo<RelatedSightingResult[]>(() => {
     if (!detailSighting) return [];
@@ -219,6 +268,99 @@ export default function MyPage() {
               </p>
             </div>
 
+            {/* 필터 영역 */}
+            <div className="px-4 py-3 border-b border-gray-100 space-y-3">
+              {/* 검색 */}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="주소 또는 내용으로 검색"
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+
+              {/* 필터 버튼들 */}
+              <div className="flex flex-wrap gap-2">
+                {/* 동물 종류 */}
+                {animalTypeOptions.map((option) => (
+                  <button
+                    key={option.value || "all"}
+                    onClick={() => setFilterAnimalType(option.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      filterAnimalType === option.value
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+
+                <div className="w-px bg-gray-200 mx-1" />
+
+                {/* 글 유형 */}
+                {(["", "SIGHTING", "LOST"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilterPostType(type)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      filterPostType === type
+                        ? "bg-purple-500 text-white border-purple-500"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+                    }`}
+                  >
+                    {type === "" ? "전체 유형" : type === "SIGHTING" ? "목격" : "실종"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2 items-center">
+                {/* 상태 */}
+                {(["", "SPOTTED", "LOST", "PROTECTING", "FOUND"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setFilterStatus(st)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      filterStatus === st
+                        ? "bg-green-500 text-white border-green-500"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-green-400"
+                    }`}
+                  >
+                    {st === ""
+                      ? "전체 상태"
+                      : st === "SPOTTED"
+                      ? "목격"
+                      : st === "LOST"
+                      ? "실종"
+                      : st === "PROTECTING"
+                      ? "보호 중"
+                      : "찾음"}
+                  </button>
+                ))}
+
+                <div className="w-px bg-gray-200 mx-1" />
+
+                {/* 보관 포함 토글 */}
+                <button
+                  onClick={() => setIncludeArchived((prev) => !prev)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    includeArchived
+                      ? "bg-gray-700 text-white border-gray-700"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+                  }`}
+                >
+                  📦 보관 포함
+                </button>
+              </div>
+
+              {/* 필터 결과 수 */}
+              <p className="text-xs text-gray-400">
+                {filteredSightings.length}개 글
+                {filteredSightings.length !== mySightings.length &&
+                  ` (전체 ${mySightings.length}개 중)`}
+              </p>
+            </div>
+
             {loading ? (
               <div className="px-4 py-12 text-center text-gray-500">
                 내 글 목록을 불러오는 중입니다...
@@ -230,12 +372,19 @@ export default function MyPage() {
                   목격 또는 실종 글을 등록해보세요.
                 </p>
               </div>
+            ) : filteredSightings.length === 0 ? (
+              <div className="px-4 py-12 text-center">
+                <p className="text-gray-700 font-medium">조건에 맞는 글이 없습니다.</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  필터를 조정해보세요.
+                </p>
+              </div>
             ) : (
               <SightingList
-                sightings={mySightings}
+                sightings={filteredSightings}
                 selectedId={selectedSightingId}
                 onSelect={handleSelect}
-                searchQuery=""
+                searchQuery={searchQuery}
               />
             )}
           </section>
