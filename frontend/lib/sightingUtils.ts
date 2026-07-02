@@ -191,6 +191,119 @@ synonymGroups.forEach((group) => {
   });
 });
 
+
+
+const HANGUL_START = 0xac00;
+const HANGUL_END = 0xd7a3;
+const CHOSUNG = [
+  "ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ",
+  "ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ",
+];
+const JUNGSUNG = [
+  "ㅏ","ㅐ","ㅑ","ㅒ","ㅓ","ㅔ","ㅕ","ㅖ","ㅗ","ㅘ",
+  "ㅙ","ㅚ","ㅛ","ㅜ","ㅝ","ㅞ","ㅟ","ㅠ","ㅡ","ㅢ","ㅣ",
+];
+const JONGSUNG = [
+  "","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ",
+  "ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ",
+];
+
+export const decomposeHangul = (text: string): string => {
+  return text
+    .split("")
+    .map((char) => {
+      const code = char.charCodeAt(0);
+
+      // 완성형 한글 음절
+      if (code >= HANGUL_START && code <= HANGUL_END) {
+        const offset = code - HANGUL_START;
+        const cho = Math.floor(offset / 588);
+        const jung = Math.floor((offset % 588) / 28);
+        const jong = offset % 28;
+
+        return CHOSUNG[cho] + JUNGSUNG[jung] + JONGSUNG[jong];
+      }
+
+      // 이미 자모이거나 다른 문자는 그대로
+      return char;
+    })
+    .join("");
+};
+
+
+const buildSearchTarget = (text: string) => {
+  const raw = text.toLowerCase();
+  const normalized = normalizeSearchText(raw);
+
+  return {
+    raw,
+    normalized,
+    rawDecomposed: decomposeHangul(raw),
+    normalizedDecomposed: decomposeHangul(normalized),
+  };
+};
+
+const getQueryVariants = (word: string): string[] => {
+  const raw = word.trim().toLowerCase();
+  if (!raw) return [];
+
+  const normalized = normalizeSearchText(raw);
+  const rawDecomposed = decomposeHangul(raw);
+  const normalizedDecomposed = decomposeHangul(normalized);
+
+  const variants = new Set<string>([raw, normalized]);
+
+  synonymGroups.forEach((group) => {
+    const lowerGroup = group.map((term) => term.toLowerCase());
+
+    const isMatchedGroup = lowerGroup.some((term) => {
+      const normalizedTerm = normalizeSearchText(term);
+      const termDecomposed = decomposeHangul(term);
+      const normalizedTermDecomposed = decomposeHangul(normalizedTerm);
+
+      return (
+        term.includes(raw) ||
+        normalizedTerm.includes(normalized) ||
+        termDecomposed.includes(rawDecomposed) ||
+        termDecomposed.includes(normalizedDecomposed) ||
+        normalizedTermDecomposed.includes(rawDecomposed) ||
+        normalizedTermDecomposed.includes(normalizedDecomposed)
+      );
+    });
+
+    if (!isMatchedGroup) return;
+
+    lowerGroup.forEach((term) => {
+      variants.add(term);
+      variants.add(normalizeSearchText(term));
+    });
+  });
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const targetMatchesVariant = (
+  target: ReturnType<typeof buildSearchTarget>,
+  variant: string
+): boolean => {
+  const normalizedVariant = normalizeSearchText(variant);
+  const decomposedVariant = decomposeHangul(variant);
+  const decomposedNormalizedVariant = decomposeHangul(normalizedVariant);
+
+  return (
+    target.raw.includes(variant) ||
+    target.raw.includes(normalizedVariant) ||
+    target.normalized.includes(variant) ||
+    target.normalized.includes(normalizedVariant) ||
+    target.rawDecomposed.includes(decomposedVariant) ||
+    target.rawDecomposed.includes(decomposedNormalizedVariant) ||
+    target.normalizedDecomposed.includes(decomposedVariant) ||
+    target.normalizedDecomposed.includes(decomposedNormalizedVariant)
+  );
+};
+
+
+
 export const normalizeSearchText = (text: string): string => {
   if (!text) return "";
 
@@ -206,21 +319,23 @@ export const normalizeSearchText = (text: string): string => {
   return normalized;
 };
 
+
 export const matchesSearch = (
   sighting: { address: string | null; description: string | null },
   searchQuery: string
 ): boolean => {
   if (!searchQuery.trim()) return true;
 
-  const normalizedQuery = normalizeSearchText(searchQuery);
-  const queryWords = normalizedQuery.split(/\s+/).filter(Boolean);
-
-  const targetText = normalizeSearchText(
+  const queryWords = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  const target = buildSearchTarget(
     [sighting.address || "", sighting.description || ""].join(" ")
   );
 
-  // 모든 검색어가 포함되어야 매칭 (AND 조건)
-  return queryWords.every((word) => targetText.includes(word));
+  // 모든 검색어가 매칭되어야 함 (AND)
+  return queryWords.every((word) => {
+    const variants = getQueryVariants(word);
+    return variants.some((variant) => targetMatchesVariant(target, variant));
+  });
 };
 
 

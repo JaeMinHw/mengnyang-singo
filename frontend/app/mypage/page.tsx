@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useDeferredValue } from "react";
+
 
 import api from "@/lib/api";
 import Header from "@/components/Header";
@@ -9,6 +10,7 @@ import SightingDetailModal from "@/components/SightingDetailModal";
 
 import {
   getRelatedSightings,
+  matchesSearch,
   type RelatedSightingResult,
 } from "@/lib/sightingUtils";
 import { useRef } from "react";
@@ -31,6 +33,9 @@ export default function MyPage() {
   const [filterPostType, setFilterPostType] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [includeArchived, setIncludeArchived] = useState(false);
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const isSearchPending = searchQuery !== deferredSearchQuery;
   const animalTypeOptions = [
     { value: "", label: "전체 동물" },
     { value: "CAT", label: "고양이" },
@@ -160,16 +165,14 @@ export default function MyPage() {
       if (filterStatus && s.status !== filterStatus) return false;
 
       // 검색어
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase();
-        const inAddress = s.address?.toLowerCase().includes(q) ?? false;
-        const inDescription = s.description?.toLowerCase().includes(q) ?? false;
-        if (!inAddress && !inDescription) return false;
+      if (deferredSearchQuery.trim()) {
+        if (!matchesSearch(s, deferredSearchQuery)) return false;
       }
 
       return true;
     });
-  }, [mySightings, searchQuery, filterAnimalType, filterPostType, filterStatus, includeArchived]);
+  }, [mySightings, deferredSearchQuery, filterAnimalType, filterPostType, filterStatus, includeArchived]);
+
 
   const relatedSightings = useMemo<RelatedSightingResult[]>(() => {
     if (!detailSighting) return [];
@@ -278,6 +281,10 @@ export default function MyPage() {
                 placeholder="주소 또는 내용으로 검색"
                 className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-black outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
+              {isSearchPending && (
+                <p className="text-xs text-gray-400 ">검색 반영 중...</p>
+              )}
+
 
               {/* 필터 버튼들 */}
               <div className="flex flex-wrap gap-2">
@@ -384,7 +391,7 @@ export default function MyPage() {
                 sightings={filteredSightings}
                 selectedId={selectedSightingId}
                 onSelect={handleSelect}
-                searchQuery={searchQuery}
+                searchQuery={deferredSearchQuery}
               />
             )}
           </section>
