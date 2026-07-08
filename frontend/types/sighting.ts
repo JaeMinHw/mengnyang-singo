@@ -54,7 +54,10 @@ export interface MyComment extends Comment {
   sighting_description: string | null;
 }
 
-
+export interface MyCommentListResponse {
+  items: MyComment[];
+  total: number;
+}
 
 export interface Notification {
   id: number;

@@ -6,6 +6,7 @@ import api from "@/lib/api";
 import Header from "@/components/Header";
 import SightingList from "@/components/SightingList";
 import SightingDetailModal from "@/components/SightingDetailModal";
+import { useRouter } from "next/navigation";
 
 import {
   animalConfig,
@@ -49,6 +50,7 @@ export default function MyPage() {
   const [selectedSightingId, setSelectedSightingId] = useState<number | null>(null);
   const [detailSighting, setDetailSighting] = useState<Sighting | null>(null);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
+  const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterAnimalType, setFilterAnimalType] = useState<string>("");
@@ -84,8 +86,19 @@ export default function MyPage() {
       .catch(() => setCurrentUser(null))
       .finally(() => setAuthLoading(false));
   }, []);
+  useEffect(() => {
+    if (!authLoading && !currentUser) {
+      router.replace("/");
+    }
+  }, [authLoading, currentUser, router]);
 
   useEffect(() => {
+    if (authLoading || !currentUser) {
+      return;
+    }
+
+    setLoading(true);
+
     Promise.all([
       api.get<Sighting[]>("/my-sightings"),
       api.get<Sighting[]>("/sightings"),
@@ -94,16 +107,26 @@ export default function MyPage() {
         setMySightings(myRes.data);
         setAllSightings(allRes.data);
       })
-      .catch((err) => console.error("글 목록 요청 실패:", err))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        console.error("글 목록 요청 실패:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [authLoading, currentUser]);
 
   useEffect(() => {
+    if (authLoading || !currentUser) {
+      return;
+    }
+
     api
       .get<KeywordSubscription[]>("/keywords")
       .then((res) => setKeywords(res.data))
       .catch((err) => console.error("키워드 조회 실패:", err));
-  }, []);
+  }, [authLoading, currentUser]);
+
+
 
   const fetchMyComments = useCallback(
     async (period: number, offset: number, append: boolean) => {
@@ -286,7 +309,9 @@ export default function MyPage() {
     { key: "comments", label: "내 댓글" },
     { key: "keywords", label: "관심 키워드", count: keywords.length },
   ];
-
+  if (!authLoading && !currentUser) {
+    return null;
+  }
   return (
     <>
       {detailSighting && (
