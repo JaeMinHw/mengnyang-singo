@@ -45,6 +45,17 @@ export interface Comment {
 }
 
 
+export interface MyComment extends Comment {
+  sighting_animal_type: string | null;
+  sighting_address: string | null;
+  sighting_status: string | null;
+  sighting_post_type: string | null;
+  sighting_image_url: string | null;
+  sighting_description: string | null;
+}
+
+
+
 export interface Notification {
   id: number;
   user_id: number;

@@ -9,8 +9,16 @@ from app.core.notifications import get_comment_participants, create_notification
 from app.models.comment import Comment
 from app.models.sighting import Sighting
 from app.models.user import User
-from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse
-
+from app.schemas.comment import (
+    CommentCreate,
+    CommentUpdate,
+    CommentResponse,
+    MyCommentResponse,
+    MyCommentListResponse,
+)
+from datetime import datetime, timedelta
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 router = APIRouter()
 
 
@@ -25,6 +33,20 @@ def comment_to_response(comment: Comment) -> dict:
         "image_url": comment.image_url,
         "created_at": comment.created_at,
         "updated_at": comment.updated_at,
+    }
+
+
+def comment_to_my_comment_response(comment: Comment) -> dict:
+    sighting = comment.sighting
+
+    return {
+        **comment_to_response(comment),
+        "sighting_animal_type": sighting.animal_type if sighting else None,
+        "sighting_address": sighting.address if sighting else None,
+        "sighting_status": sighting.status if sighting else None,
+        "sighting_post_type": sighting.post_type if sighting else None,
+        "sighting_image_url": sighting.image_url if sighting else None,
+        "sighting_description": sighting.description if sighting else None,
     }
 
 
@@ -131,6 +153,44 @@ def get_comments(
 
     return [comment_to_response(c) for c in comments]
 
+@router.get(
+    "/my-comments",
+    response_model=MyCommentListResponse,
+)
+def get_my_comments(
+    days: Optional[int] = Query(None, description="최근 N일 이내"),
+    limit: int = Query(10, ge=1, le=100, description="최대 조회 개수"),
+    offset: int = Query(0, ge=0, description="건너뛸 개수"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
+        db.query(Comment)
+        .filter(
+            Comment.user_id == current_user.id,
+            Comment.is_deleted == False,
+            Comment.sighting.has(Sighting.is_deleted == False),
+        )
+    )
+
+    if days is not None:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(Comment.created_at >= cutoff)
+
+    total = query.count()
+
+    comments = (
+        query
+        .order_by(Comment.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "items": [comment_to_my_comment_response(c) for c in comments],
+        "total": total,
+    }
 
 @router.patch(
     "/comments/{comment_id}",

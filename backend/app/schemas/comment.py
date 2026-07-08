@@ -25,3 +25,17 @@ class CommentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MyCommentResponse(CommentResponse):
+    sighting_animal_type: Optional[str] = None
+    sighting_address: Optional[str] = None
+    sighting_status: Optional[str] = None
+    sighting_post_type: Optional[str] = None
+    sighting_image_url: Optional[str] = None
+    sighting_description: Optional[str] = None
+
+
+class MyCommentListResponse(BaseModel):
+    items: list[MyCommentResponse]
+    total: int
