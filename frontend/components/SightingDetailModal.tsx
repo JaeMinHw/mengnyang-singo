@@ -662,6 +662,34 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
             </div>
           )}
 
+          {/* 비작성자: 작성자와 채팅 */}
+          {!isOwner && currentUserId && (
+            <div className="border-t border-gray-100 pt-3">
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await api.post("/chat/rooms/open", {
+                      sighting_id: sighting.id,
+                      target_user_id: sighting.user_id,
+                    });
+                    onClose();
+                    router.push(`/chats/${res.data.id}`);
+                  } catch (err: any) {
+                    console.error("채팅방 열기 실패:", err);
+                    alert(
+                      err?.response?.data?.detail ||
+                        "채팅을 시작할 수 없습니다."
+                    );
+                  }
+                }}
+                className="w-full py-2 text-sm font-medium text-green-600 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
+              >
+                💬 작성자와 채팅하기
+              </button>
+            </div>
+          )}
+
+
           {/* 관련 글 추천 */}
           {relatedSightings.length > 0 && (
             <div className="border-t border-gray-100 pt-4">

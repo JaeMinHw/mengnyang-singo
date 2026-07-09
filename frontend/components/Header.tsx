@@ -95,7 +95,14 @@ export default function Header({ currentUser, authLoading }: HeaderProps) {
                 <span className="hidden sm:inline">목격 및 실종 등록하기</span>
               </span>
             </Link>
-
+            <Link
+              href="/chats"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="채팅"
+              title="채팅"
+            >
+              <span className="text-xl">💬</span>
+            </Link>
             <Link
               href="/notifications"
               className="relative inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 transition-colors"

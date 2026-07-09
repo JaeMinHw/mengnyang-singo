@@ -79,3 +79,29 @@ export interface KeywordSubscription {
   is_active: boolean;
   created_at: string;
 }
+
+export interface ChatRoom {
+  id: number;
+  sighting_id: number;
+  sighting_description: string | null;
+  sighting_animal_type: string | null;
+  sighting_address: string | null;
+  sighting_post_type: string | null;
+  sighting_is_deleted: boolean;
+  owner_user_id: number;
+  owner_nickname: string | null;
+  participant_user_id: number;
+  participant_nickname: string | null;
+  last_message_at: string | null;
+  last_message_content: string | null;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  room_id: number;
+  sender_user_id: number;
+  sender_nickname: string | null;
+  content: string;
+  created_at: string;
+}
