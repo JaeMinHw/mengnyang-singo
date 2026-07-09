@@ -22,6 +22,9 @@ import sys
 import os
 from dotenv import load_dotenv
 
+from app.models.chat_room import ChatRoom
+from app.models.chat_message import ChatMessage
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.database import Base
