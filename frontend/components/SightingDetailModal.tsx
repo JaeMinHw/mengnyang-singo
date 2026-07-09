@@ -99,6 +99,9 @@ export default function SightingDetailModal({
   const [editingImagePreview, setEditingImagePreview] = useState<string | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const editFileRef = useRef<HTMLInputElement>(null);
+  
+  
+  const [openingCommentChatUserId, setOpeningCommentChatUserId] = useState<number | null>(null);
 
   const activeImageUrl = imageUrls[activeImageIndex] ?? null;
 
@@ -396,6 +399,30 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
       } else {
         alert("댓글 삭제에 실패했습니다.");
       }
+    }
+  };
+
+  const handleOpenChatWithCommentUser = async (targetUserId: number) => {
+    if (openingCommentChatUserId === targetUserId) return;
+
+    setOpeningCommentChatUserId(targetUserId);
+
+    try {
+      const res = await api.post<{ id: number }>("/chat/rooms/open", {
+        sighting_id: sighting.id,
+        target_user_id: targetUserId,
+      });
+
+      onClose();
+      router.push(`/chats/${res.data.id}`);
+    } catch (err: any) {
+      console.error("댓글 작성자와 채팅방 열기 실패:", err);
+      alert(
+        err?.response?.data?.detail ||
+          "채팅을 시작할 수 없습니다."
+      );
+    } finally {
+      setOpeningCommentChatUserId(null);
     }
   };
 
@@ -881,6 +908,7 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
                           <span className="text-xs font-medium text-gray-700">
                             {comment.user_nickname || "익명"}
                           </span>
+
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400">
                               {formatDate(comment.created_at)}
@@ -888,6 +916,19 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
                                 <span className="ml-1">(수정됨)</span>
                               )}
                             </span>
+
+                            {/* 글 작성자 전용: 다른 사람 댓글에 채팅 버튼 */}
+                            {isOwner && !isCommentOwner && (
+                              <button
+                                onClick={() => handleOpenChatWithCommentUser(comment.user_id)}
+                                disabled={openingCommentChatUserId === comment.user_id}
+                                className="text-xs text-green-600 hover:text-green-700 transition-colors disabled:text-gray-400"
+                              >
+                                {openingCommentChatUserId === comment.user_id ? "여는 중..." : "채팅"}
+                              </button>
+                            )}
+
+                            {/* 댓글 작성자 본인 전용: 수정/삭제 */}
                             {isCommentOwner && !isEditing && (
                               <div className="flex items-center gap-1">
                                 <button
