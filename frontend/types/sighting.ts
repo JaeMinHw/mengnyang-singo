@@ -105,3 +105,18 @@ export interface ChatMessage {
   content: string;
   created_at: string;
 }
+
+
+export interface CasePreviewItem {
+  sighting: Sighting;
+  is_base: boolean;
+  distance_meters: number;
+  time_diff_minutes: number;
+  estimated_speed_kmh: number | null;
+  matched_features: string[];
+}
+
+export interface CasePreviewResponse {
+  base_sighting_id: number;
+  items: CasePreviewItem[];
+}

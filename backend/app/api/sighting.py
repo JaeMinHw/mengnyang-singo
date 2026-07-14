@@ -8,7 +8,13 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.sighting import Sighting
 from app.models.user import User
-from app.schemas.sighting import SightingCreate, SightingResponse, SightingStatusUpdate, SightingUpdate
+from app.schemas.sighting import (
+    SightingCreate,
+    SightingResponse,
+    SightingStatusUpdate,
+    SightingUpdate,
+    CasePreviewResponse,
+)
 
 from app.models.sighting_image import SightingImage
 
@@ -23,6 +29,7 @@ from app.core.similar_sightings import (
     find_similar_sightings,
     has_similar_match_history,
     record_similar_match_history,
+    find_case_preview_sightings,
 )
 
 router = APIRouter()
@@ -222,6 +229,18 @@ def sighting_to_response(sighting: Sighting) -> dict:
         "created_at": sighting.created_at,
         "updated_at": sighting.updated_at,
     }
+
+
+def case_preview_match_to_response(match) -> dict:
+    return {
+        "sighting": sighting_to_response(match.sighting),
+        "is_base": False,
+        "distance_meters": match.distance_meters,
+        "time_diff_minutes": match.time_diff_minutes,
+        "estimated_speed_kmh": match.estimated_speed_kmh,
+        "matched_features": match.matched_features,
+    }
+
 
 @router.post("/sightings", response_model=SightingResponse)
 def create_sighting(
@@ -515,6 +534,50 @@ def get_nearby_sightings(
     ).order_by(Sighting.created_at.desc()).all()
 
     return [sighting_to_response(s) for s in sightings]
+
+@router.get("/sightings/{sighting_id}/case-preview", response_model=CasePreviewResponse)
+def get_case_preview(
+    sighting_id: int,
+    db: Session = Depends(get_db),
+):
+    base_sighting = db.query(Sighting).filter(
+        Sighting.id == sighting_id,
+        Sighting.is_deleted == False,
+    ).first()
+
+    if not base_sighting:
+        raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다")
+
+    matches = find_case_preview_sightings(
+        db=db,
+        base_sighting=base_sighting,
+    )
+
+    items = [
+        {
+            "sighting": sighting_to_response(base_sighting),
+            "is_base": True,
+            "distance_meters": 0,
+            "time_diff_minutes": 0,
+            "estimated_speed_kmh": None,
+            "matched_features": [],
+        }
+    ]
+
+    items.extend(case_preview_match_to_response(match) for match in matches)
+
+    items.sort(
+        key=lambda item: (
+            item["sighting"]["created_at"].timestamp()
+            if item["sighting"]["created_at"]
+            else 0
+        )
+    )
+
+    return {
+        "base_sighting_id": base_sighting.id,
+        "items": items,
+    }
 
 
 @router.get("/sightings/{sighting_id}", response_model=SightingResponse)

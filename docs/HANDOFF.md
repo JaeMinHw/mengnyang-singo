@@ -1,5 +1,160 @@
 # 멍냥신고 프로젝트 인계 문서
 
+> **마지막 갱신:** 2026-07-09  
+> **갱신 규칙:** 기능이 완료·커밋될 때마다 이 문서를 수정한다. 새 채팅 시작 시 `docs/HANDOFF.md`를 읽고 이어서 작업한다.
+
+---
+
+## 한 줄 요약
+
+로컬 Docker 환경에서 JWT 인증, 지도 기반 목격/실종 등록(다중 이미지 최대 5장), 댓글, 키워드 알림, 유사 글 매칭 2차, shared 동의어 단일 원본 관리, 마이페이지 탭 구조(내 글/내 댓글/관심 키워드)까지 완료되었고, 현재는 **채팅 기능 1차(MVP)** 를 붙이는 중이다. 채팅 DB/백엔드 API/프론트 기본 페이지는 들어간 상태이며, **작성자 → 댓글 작성자 채팅 시작 버튼 연결**과 **채팅 전체 수동 테스트**가 다음 우선 작업이다.
+
+---
+
+## 갱신 이력 (최신순)
+
+| 날짜 | 내용 |
+|------|------|
+| 2026-07-09 | 채팅 1차 진행 상태를 반영해 인계 문서 갱신 |
+| 2026-07-08 | 마이페이지 고도화 완료: 탭 구조(내 글/내 댓글/관심 키워드), 내 댓글 기간 필터 + 페이징, 로그아웃/비인증 접근 제어 |
+| 2026-06-30 | shared JSON dev watch 자동화 완료 |
+| 2026-06-30 | 유사 글 매칭 2차 완료 (`similar_match_history`, 수정/되돌리기 재매칭, 동의어 정규화 통일) |
+| 2026-06-30 | 인계 문서 `docs/HANDOFF.md` 생성 |
+
+---
+
+## 프로젝트 개요
+
+**프로젝트명:** 멍냥신고
+
+**목적:**
+- 길고양이 / 유기견 / 기타 동물의 목격 위치를 지도 기반으로 공유하는 웹 서비스
+- Docker + Nginx + Blue-Green 방식으로 무중단 배포 실습
+- 현재는 AWS 없이 로컬 환경 중심 개발
+
+**장기 확장 계획:**
+- 찾는 글(실종 동물 등록) ✅
+- 유사 신고 매칭 (프론트 관련 글 추천 ✅ / 백엔드 유사 매칭 알림 ✅ 2차 완료)
+- 알림 ✅ 1차 완료
+- 채팅 ⏳ 1차 진행 중
+- 사건(케이스) 단위 추적 — 미구현
+
+**개발 PC 경로:** `C:\Users\Hivesystem\Desktop\mengnyang-singo`
+
+---
+
+## 기술 스택
+
+### Frontend
+- Next.js 16 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS
+- react-kakao-maps-sdk
+- axios
+- exifr (EXIF GPS)
+- zustand, @tanstack/react-query (설치됨, 핵심 흐름은 axios 직접 호출)
+
+### Backend
+- Python 3.13
+- FastAPI
+- SQLAlchemy
+- Alembic
+- Pydantic / pydantic-settings
+
+### Auth / Security
+- passlib[bcrypt]==1.7.4
+- bcrypt==4.0.1
+- python-jose[cryptography]==3.3.0
+- email-validator==2.2.0
+
+### Infra
+- Docker / Docker Compose
+- Nginx
+- MySQL 8.0
+
+---
+
+## 아키텍처
+
+### 컨테이너 구성
+| 서비스 | 역할 |
+|--------|------|
+| nginx | 리버스 프록시. `/api` → backend, 나머지 → frontend |
+| app-blue | 기본 활성 backend 슬롯 |
+| app-green | Blue-Green 배포 테스트용 (`profiles: green`) |
+| app-migrate | Alembic 전용 (`profiles: migrate`) |
+| app-frontend | Next.js 프론트엔드 |
+| db | MySQL 8.0 |
+
+### 중요 개념
+- blue/green은 **배포 슬롯**이지 버전 개념이 아님
+- 평소 기본 활성 슬롯은 **Blue**
+- `deploy.ps1` → green 전환, `reset.ps1` → blue 복귀
+- Docker build context = 루트 (`.`) → `shared/` 폴더를 프론트/백엔드 모두 사용
+
+### app-migrate 특이사항
+- bind mount (`./backend:/app`)가 `/app`를 덮어씌우므로
+- `./shared:/app/shared:ro` 별도 마운트로 shared JSON 접근
+
+---
+
+## 핵심 파일 구조
+
+```txt
+mengnyang-singo/
+├── docs/
+│   └── HANDOFF.md
+├── .env
+├── docker-compose.yml
+├── deploy.ps1 / reset.ps1
+├── shared/
+│   └── synonym-groups.json
+├── nginx/nginx.conf
+├── backend/
+│   ├── Dockerfile
+│   ├── alembic/
+│   │   └── versions/
+│   │       ├── b2ce8bce83e6_add_similar_match_history.py
+│   │       └── 10d58048ab7f_add_chat_room_and_message.py
+│   └── app/
+│       ├── core/
+│       │   ├── synonyms.py
+│       │   ├── similar_sightings.py
+│       │   ├── notifications.py
+│       │   └── dependencies.py
+│       ├── models/
+│       │   ├── similar_match_history.py
+│       │   ├── sighting_image.py
+│       │   ├── chat_room.py          ← 신규
+│       │   ├── chat_message.py       ← 신규
+│       │   └── ...
+│       ├── schemas/
+│       │   ├── chat.py               ← 신규
+│       │   └── ...
+│       └── api/
+│           ├── chat.py               ← 신규
+│           └── ...
+└── frontend/
+    ├── scripts/
+    │   ├── copy-shared.mjs
+    │   └── dev.mjs
+    ├── shared/
+    ├── app/
+    │   ├── mypage/page.tsx
+    │   ├── chats/page.tsx            ← 신규
+    │   └── chats/[roomId]/page.tsx   ← 신규
+    ├── components/
+    │   ├── Header.tsx
+    │   └── SightingDetailModal.tsx
+    ├── lib/
+    │   ├── api.ts
+    │   └── sightingUtils.ts
+    └── types/
+        └── sighting.ts
+
+# 멍냥신고 프로젝트 인계 문서
+
 > **마지막 갱신:** 2026-06-30  
 > **갱신 규칙:** 기능이 완료·커밋될 때마다 이 문서를 수정한다. 새 채팅 시작 시 `docs/HANDOFF.md`를 읽고 이어서 작업한다.
 

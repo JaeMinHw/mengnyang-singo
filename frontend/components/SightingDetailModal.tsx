@@ -569,6 +569,22 @@ const handleEditSubmit = async (commentId: number, existingImageUrl: string | nu
             </p>
           </div>
 
+          <div className="border-t border-gray-100 pt-3">
+            <button
+              onClick={() => {
+                onClose();
+                router.push(`/cases/preview?sightingId=${sighting.id}`);
+              }}
+              className="w-full py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-xl hover:bg-indigo-100 transition-colors"
+            >
+              🗺️ 이동 경로 미리보기
+            </button>
+
+            <p className="text-xs text-gray-400 mt-2">
+              같은 동물로 추정되는 글 흐름을 시간순으로 확인합니다.
+            </p>
+          </div>
+
           {/* 작성자 전용: 상태 변경 */}
 
           {isOwner && (

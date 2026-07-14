@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from math import atan2, cos, radians, sin, sqrt
 from typing import Optional
 
@@ -11,7 +12,16 @@ from app.models.similar_match_history import SimilarMatchHistory
 
 SIMILAR_SIGHTING_MAX_DISTANCE_METERS = 3000
 SIMILAR_SIGHTING_MAX_RESULTS = 3
+CASE_PREVIEW_MAX_DISTANCE_METERS = 5000
+CASE_PREVIEW_MAX_RESULTS = 10
+CASE_PREVIEW_MAX_DAYS = 30
+CASE_PREVIEW_MAX_SPEED_KMH = 15.0
 
+CASE_PREVIEW_SHORT_WINDOW_MINUTES = 10
+CASE_PREVIEW_SHORT_WINDOW_MAX_DISTANCE_METERS = 2000
+
+CASE_PREVIEW_MEDIUM_WINDOW_MINUTES = 30
+CASE_PREVIEW_MEDIUM_WINDOW_MAX_DISTANCE_METERS = 4000
 
 @dataclass
 class SimilarSightingMatch:
@@ -19,6 +29,13 @@ class SimilarSightingMatch:
     distance_meters: float
     matched_features: list[str]
 
+@dataclass
+class CasePreviewMatch:
+    sighting: Sighting
+    distance_meters: float
+    time_diff_minutes: float
+    estimated_speed_kmh: Optional[float]
+    matched_features: list[str]
 
 def get_similar_match_pair_ids(
     sighting_id_1: int,
@@ -92,6 +109,59 @@ def get_distance_in_meters(
     )
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
+
+
+
+def get_time_diff_minutes(
+    base_created_at,
+    candidate_created_at,
+) -> float:
+    if not base_created_at or not candidate_created_at:
+        return 0.0
+
+    diff_seconds = abs((candidate_created_at - base_created_at).total_seconds())
+    return diff_seconds / 60
+
+
+def get_estimated_speed_kmh(
+    distance_meters: float,
+    time_diff_minutes: float,
+) -> Optional[float]:
+    if time_diff_minutes <= 0:
+        return None
+
+    distance_km = distance_meters / 1000
+    time_hours = time_diff_minutes / 60
+    if time_hours <= 0:
+        return None
+
+    return distance_km / time_hours
+
+
+def is_plausible_movement(
+    distance_meters: float,
+    time_diff_minutes: float,
+    max_speed_kmh: float = CASE_PREVIEW_MAX_SPEED_KMH,
+) -> bool:
+    # 짧은 시간 + 긴 거리 = 바로 제외
+    if (
+        time_diff_minutes <= CASE_PREVIEW_SHORT_WINDOW_MINUTES
+        and distance_meters >= CASE_PREVIEW_SHORT_WINDOW_MAX_DISTANCE_METERS
+    ):
+        return False
+
+    if (
+        time_diff_minutes <= CASE_PREVIEW_MEDIUM_WINDOW_MINUTES
+        and distance_meters >= CASE_PREVIEW_MEDIUM_WINDOW_MAX_DISTANCE_METERS
+    ):
+        return False
+
+    estimated_speed_kmh = get_estimated_speed_kmh(distance_meters, time_diff_minutes)
+    if estimated_speed_kmh is not None and estimated_speed_kmh > max_speed_kmh:
+        return False
+
+    return True
+
 
 
 def extract_feature_keywords(text: Optional[str]) -> list[str]:
@@ -177,3 +247,101 @@ def find_similar_sightings(
     )
 
     return scored[:max_results]
+
+
+
+def find_case_preview_sightings(
+    db: Session,
+    base_sighting: Sighting,
+    max_distance_meters: int = CASE_PREVIEW_MAX_DISTANCE_METERS,
+    max_results: int = CASE_PREVIEW_MAX_RESULTS,
+    max_days: int = CASE_PREVIEW_MAX_DAYS,
+) -> list[CasePreviewMatch]:
+    if base_sighting.is_deleted:
+        return []
+
+    query = db.query(Sighting).filter(
+        Sighting.id != base_sighting.id,
+        Sighting.is_deleted == False,
+        Sighting.animal_type == base_sighting.animal_type,
+    )
+
+    if base_sighting.created_at:
+        min_created_at = base_sighting.created_at - timedelta(days=max_days)
+        max_created_at = base_sighting.created_at + timedelta(days=max_days)
+        query = query.filter(
+            Sighting.created_at >= min_created_at,
+            Sighting.created_at <= max_created_at,
+        )
+
+    candidates = query.all()
+
+    base_features = set(extract_feature_keywords(base_sighting.description))
+    scored: list[CasePreviewMatch] = []
+
+    for candidate in candidates:
+        distance_meters = get_distance_in_meters(
+            base_sighting.latitude,
+            base_sighting.longitude,
+            candidate.latitude,
+            candidate.longitude,
+        )
+
+        if distance_meters > max_distance_meters:
+            continue
+
+        time_diff_minutes = get_time_diff_minutes(
+            base_sighting.created_at,
+            candidate.created_at,
+        )
+
+        if not is_plausible_movement(distance_meters, time_diff_minutes):
+            continue
+
+        candidate_features = set(extract_feature_keywords(candidate.description))
+        matched_features = sorted(base_features.intersection(candidate_features))
+
+        # 양쪽 다 특징이 있는데 공통점이 하나도 없으면 제외
+        if base_features and candidate_features and not matched_features:
+            continue
+
+        estimated_speed_kmh = get_estimated_speed_kmh(
+            distance_meters,
+            time_diff_minutes,
+        )
+
+        scored.append(
+            CasePreviewMatch(
+                sighting=candidate,
+                distance_meters=distance_meters,
+                time_diff_minutes=time_diff_minutes,
+                estimated_speed_kmh=estimated_speed_kmh,
+                matched_features=matched_features,
+            )
+        )
+
+    # 1) 반대 post_type 우선
+    # 2) 공통 특징 많은 순
+    # 3) 시간 차이 적은 순
+    # 4) 가까운 순
+    scored.sort(
+        key=lambda item: (
+            item.sighting.post_type == base_sighting.post_type,
+            -len(item.matched_features),
+            item.time_diff_minutes,
+            item.distance_meters,
+        )
+    )
+
+    selected = scored[:max_results]
+
+    # 프론트에서 이동 흐름 그리기 쉽도록 시간순 정렬
+    selected.sort(
+        key=lambda item: (
+            item.sighting.created_at.timestamp()
+            if item.sighting.created_at
+            else 0
+        )
+    )
+
+    return selected

@@ -58,3 +58,17 @@ class SightingUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     address: Optional[str] = None
+
+
+class CasePreviewItemResponse(BaseModel):
+    sighting: SightingResponse
+    is_base: bool = False
+    distance_meters: float
+    time_diff_minutes: float
+    estimated_speed_kmh: Optional[float] = None
+    matched_features: List[str] = Field(default_factory=list)
+
+
+class CasePreviewResponse(BaseModel):
+    base_sighting_id: int
+    items: List[CasePreviewItemResponse] = Field(default_factory=list)
